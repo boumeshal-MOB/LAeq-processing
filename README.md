@@ -1,73 +1,50 @@
-# LAeq Processor — SONO / Micromate
+# LAeq Processor — GitHub Pages demo
 
-Application de démonstration déployable sur GitHub Pages sans installation locale.
+Démo 100% navigateur pour traiter des fichiers CSV SONO / Micromate :
 
-## Ce que fait l'application
+- Drag & drop du CSV
+- Détection automatique du type de fichier
+- Détection automatique de la résolution source à partir des timestamps
+- Lecture des métadonnées Micromate quand disponibles : `SampleRate`, `IntervalSize`, `SerialNumber`, etc.
+- Calcul énergétique LAeq,T : `10 * log10(mean(10^(Li/10)))`
+- Mode blocs alignés ou glissant
+- Pas de sortie configurable : 60 s, 900 s, etc.
+- Affichage tableur
+- Téléchargement CSV output : `timestamp,LAeq_dBA`
+- Interface Français / English
 
-- Drag & drop d'un fichier CSV.
-- Détection automatique du format :
-  - **CUBE / SONO** : colonne `Time` + `LAeq`.
-  - **Micromate / géophone + micro** : colonne `Mic / Leq / dB(A)`.
-- Calcul du **LAeq,T** par moyenne énergétique.
-- Deux modes :
-  - **Blocs fixes** : 13:00 → 13:15, 13:15 → 13:30, etc.
-  - **Glissant** : fenêtre mobile, puis réduction au pas de sortie.
-- Affichage du résultat sous forme de tableur.
-- Téléchargement du fichier de sortie CSV : `timestamp,LAeq_dBA`.
+## Déploiement GitHub Pages
 
-## Formule utilisée
+Mettre à la racine du repo :
 
 ```text
-LAeq,T = 10 log10( mean(10^(Li/10)) )
+index.html
+.nojekyll
+README.md
+.github/     # optionnel
+backend/     # optionnel, non utilisé par GitHub Pages
 ```
 
-Le code ne fait jamais une moyenne directe des dB.
+Puis :
 
-## Déploiement GitHub Pages sans installation
-
-1. Créer un nouveau repository GitHub.
-2. Dans le repository, cliquer sur **Add file → Upload files**.
-3. Glisser-déposer le contenu de ce dossier, notamment `index.html` à la racine.
-4. Cliquer sur **Commit changes**.
-5. Aller dans **Settings → Pages**.
-6. Dans **Build and deployment**, choisir :
-   - Source : **Deploy from a branch**
-   - Branch : `main`
-   - Folder : `/root`
-7. Ouvrir l'URL GitHub Pages fournie.
+1. GitHub > Settings > Pages
+2. Source: Deploy from a branch
+3. Branch: main
+4. Folder: /root
 
 ## Important
 
-Le fichier `index.html` est autonome : le traitement se fait dans le navigateur.
-Aucune donnée n'est envoyée à un serveur.
+La version GitHub Pages ne lance pas Python. Tout le calcul se fait dans le navigateur. Les fichiers déposés ne sont pas envoyés à un serveur.
 
-Le dossier `backend/` contient une première version Lambda Python pour l'étape suivante, mais il n'est pas exécuté par GitHub Pages.
-GitHub Pages héberge uniquement du statique : HTML / CSS / JavaScript.
+Le dossier `backend/` est conservé uniquement comme base pour une future version Lambda/API Gateway.
 
-## Paramètres principaux
+## Correction ajoutée
 
-| Paramètre | Description |
-|---|---|
-| Type de source | Auto, CUBE/SONO ou Micromate |
-| Mode | Blocs fixes ou glissant |
-| Fenêtre LAeq | Durée d'intégration, 900 s par défaut |
-| Pas de sortie | Pas temporel du fichier résultat |
-| Couverture minimale | Pourcentage minimum de données présentes pour valider une période |
-| Timestamp résultat | Début ou fin de période |
-| Conserver les brutes | Option projet pour la future base de données |
+Le champ **Pas de sortie** est maintenant pris en compte même si la fenêtre LAeq reste à 900 s.
 
-## Prochaine étape backend
+Exemple :
 
-Pour passer en architecture cloud complète :
+- Fenêtre LAeq = 900 s
+- Pas de sortie = 60 s
 
-```text
-CSV source / base brute
-↓
-Lambda Python
-↓
-processed_acoustic_result
-↓
-Dashboard / export CSV / export DAT
-```
-
-Les fichiers du dossier `backend/` sont là comme base pour cette évolution.
+=> l'application calcule une valeur LAeq toutes les minutes dès que les 900 s de données sont couverts.
