@@ -2,476 +2,115 @@
   'use strict';
 
   const C=window.BTMCore;
-  const $=(id)=>document.getElementById(id);
-  const KEY='btm-laeq-v3-admin-v4';
+  const $=id=>document.getElementById(id);
+  const STORAGE_KEY='btm-laeq-v3-admin-v5';
+  const OLD_KEYS=['btm-laeq-v3-admin-v4','btm-laeq-v3-admin-v3'];
   const DAY_ORDER=[1,2,3,4,5,6,0];
-  const DAY_NAMES={0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
-  const WEEKDAYS=[1,2,3,4,5];
-  const EVERY_DAY=[0,1,2,3,4,5,6];
 
   let state=loadState();
-  let parsed=null;
-  let points=[];
-  let acquisitionSec=null;
-  let results=[];
-
-  let outputs=state.outputs||[
-    {id:'15m',variableName:'Noise_LAeq_15min',displayName:'LAeq 15 min',duration:15,unit:'min',mode:'fixed',step:15,stepUnit:'min',calendarStart:'00:00',calendarEnd:'00:15',calendarDays:EVERY_DAY.slice(),active:true},
-    {id:'1h',variableName:'Noise_LAeq_1h',displayName:'LAeq 1 h',duration:1,unit:'h',mode:'fixed',step:1,stepUnit:'h',calendarStart:'00:00',calendarEnd:'01:00',calendarDays:EVERY_DAY.slice(),active:true},
-    {id:'10h',variableName:'Noise_LAeq_10h',displayName:'LAeq 10 h',duration:10,unit:'h',mode:'calendar',step:1,stepUnit:'h',calendarStart:'07:00',calendarEnd:'17:00',calendarDays:WEEKDAYS.slice(),active:true}
-  ];
-
-  for(const output of outputs){
-    output.calendarDays=C.normalizeCalendarDays(output.calendarDays);
-  }
-
-  $('pname').value=state.processingName||$('pname').value;
-  $('active').value=state.active||'Yes';
-  $('coverage').value=state.coverage??80;
-  $('catchup').value=state.catchup||'yes';
-  $('recalcLate').value=state.recalcLate||'no';
-  $('late').value=state.lateTolerance??0;
-  $('fcustom').value=state.customFrequency??'';
-  $('fcustomUnit').value=state.customFrequencyUnit||'min';
-
-  const initialMode=state.executionMode==='custom'?'custom':'event';
-  $('execEvent').checked=initialMode==='event';
-  $('execCustom').checked=initialMode==='custom';
+  let outputs=(state.outputs?.length?state.outputs:C.templateOutputs(state.templateId||'basic')).map(output=>C.normalizeOutput(output));
+  let parsed=null,points=[],acquisitionSeconds=null,results=[];
 
   function loadState(){
-    try{return JSON.parse(localStorage.getItem(KEY)||'{}');}
-    catch{return {};}
-  }
-
-  function executionMode(){return $('execCustom').checked?'custom':'event';}
-
-  function customRunSeconds(){
-    const value=Number($('fcustom').value);
-    if(!Number.isFinite(value)||value<=0)return null;
-    return C.seconds(value,$('fcustomUnit').value);
+    try{
+      const direct=localStorage.getItem(STORAGE_KEY);if(direct)return JSON.parse(direct);
+      for(const key of OLD_KEYS){
+        const legacy=localStorage.getItem(key);
+        if(legacy){
+          const migrated=JSON.parse(legacy);
+          migrated.outputs=(migrated.outputs||[]).map(output=>({...output,scheduleStart:output.scheduleStart||output.calendarStart||'00:00',scheduleEnd:output.scheduleEnd||output.calendarEnd||'00:00',scheduleDays:output.scheduleDays||output.calendarDays||C.ALL_DAYS,scheduleEnabled:output.mode==='calendar'?true:Boolean(output.scheduleEnabled),scheduleReview:!output.scheduleDays&&!output.calendarDays}));
+          return migrated;
+        }
+      }
+    }catch(error){console.warn('Unable to load saved LAeq state',error);}
+    return {};
   }
 
   function persist(){
-    state.processingName=$('pname').value.trim();
-    state.active=$('active').value;
-    state.executionMode=executionMode();
-    state.customFrequency=$('fcustom').value===''?null:Number($('fcustom').value);
-    state.customFrequencyUnit=$('fcustomUnit').value;
-    state.coverage=Number($('coverage').value)||0;
-    state.catchup=$('catchup').value;
-    state.recalcLate=$('recalcLate').value;
-    state.lateTolerance=Number($('late').value)||0;
-    state.outputs=outputs;
-    localStorage.setItem(KEY,JSON.stringify(state));
+    state.processingName=$('processingName').value.trim();state.processingActive=$('processingActive').value;state.timeZone=$('timeZone').value;state.templateId=$('templateSelect').value;state.executionMode=$('customExecution').checked?'custom':'smart';state.customFrequency=$('customFrequency').value===''?null:Number($('customFrequency').value);state.customFrequencyUnit=$('customFrequencyUnit').value;state.coverage=Number($('coverage').value)||0;state.catchup=$('catchup').value;state.outputs=outputs;
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch{}
   }
 
-  function currentVariableName(){
-    return parsed?$('vc').options[$('vc').selectedIndex]?.textContent||'—':'—';
+  function setInitialValues(){
+    $('processingName').value=state.processingName||'Environmental noise LAeq';$('processingActive').value=state.processingActive||'yes';$('timeZone').value=state.timeZone||C.getTemplate(state.templateId||'basic')?.timeZone||'Europe/Paris';$('coverage').value=state.coverage??80;$('catchup').value=state.catchup||'yes';$('customFrequency').value=state.customFrequency??'';$('customFrequencyUnit').value=state.customFrequencyUnit||'min';const custom=state.executionMode==='custom';$('customExecution').checked=custom;$('smartExecution').checked=!custom;
   }
 
-  function activateTab(id){
-    document.querySelectorAll('.tab,.panel').forEach(el=>el.classList.remove('on'));
-    document.querySelector(`.tab[data-p="${id}"]`)?.classList.add('on');
-    $(id)?.classList.add('on');
-    if(id==='admin')renderAdministration();
-  }
+  function activatePanel(id){document.querySelectorAll('.tab,.panel').forEach(element=>element.classList.remove('active'));document.querySelector(`.tab[data-panel="${id}"]`)?.classList.add('active');$(id)?.classList.add('active');if(id==='admin')renderAdministration();}
+  function daysLabel(days){const normalized=C.normalizeDays(days);if(normalized.length===7)return 'Every day';if(JSON.stringify([...normalized].sort())===JSON.stringify([1,2,3,4,5]))return 'Mon–Fri';if(JSON.stringify([...normalized].sort())===JSON.stringify([1,2,3,4,5,6]))return 'Mon–Sat';return DAY_ORDER.filter(day=>normalized.includes(day)).map(day=>C.DAY_NAMES[day]).join(', ');}
+  function scheduleLabel(output){return !output.scheduleEnabled&&output.mode!=='calendar'?'All time':`${output.scheduleStart}–${output.scheduleEnd} · ${daysLabel(output.scheduleDays)}`;}
+  function outputSummary(rawOutput){const output=C.normalizeOutput({...rawOutput});if(output.mode==='calendar')return `${C.duration(output.periodSeconds)} scheduled period · ${scheduleLabel(output)} · one result per selected start day`;if(output.mode==='rolling')return `${C.duration(output.periodSeconds)} rolling window · result every ${C.duration(output.stepSeconds)} · ${scheduleLabel(output)}`;return `${C.duration(output.periodSeconds)} fixed window · result every ${C.duration(output.periodSeconds)} · ${scheduleLabel(output)}`;}
 
-  document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>activateTab(tab.dataset.p)));
-
-  function sameDays(left,right){
-    const a=[...left].sort((x,y)=>x-y);
-    const b=[...right].sort((x,y)=>x-y);
-    return a.length===b.length&&a.every((value,index)=>value===b[index]);
-  }
-
-  function calendarDaysLabel(days){
-    const normalized=C.normalizeCalendarDays(days);
-    if(sameDays(normalized,EVERY_DAY))return 'Every day';
-    if(sameDays(normalized,WEEKDAYS))return 'Mon–Fri';
-    return DAY_ORDER.filter(day=>normalized.includes(day)).map(day=>DAY_NAMES[day]).join(', ');
-  }
-
-  function calendarDayControls(output){
-    const selected=C.normalizeCalendarDays(output.calendarDays);
-    const chips=DAY_ORDER.map(day=>`<label class="day-chip"><input type="checkbox" data-day="${day}" ${selected.includes(day)?'checked':''}><span>${DAY_NAMES[day]}</span></label>`).join('');
-    return `<div class="calendar-editor">
-      <div class="calendar-range"><input type="time" data-k="calendarStart" value="${output.calendarStart}"><span>→</span><input type="time" data-k="calendarEnd" value="${output.calendarEnd}"></div>
-      <div class="calendar-days" aria-label="Active calendar days">${chips}</div>
-      <div class="calendar-presets"><button type="button" class="text-btn" data-calendar-preset="weekdays">Weekdays</button><button type="button" class="text-btn" data-calendar-preset="all">Every day</button></div>
-      <div class="calendar-note">For overnight periods, selected days refer to the start day.</div>
-    </div>`;
+  function scheduleEditor(output){
+    const dayChips=DAY_ORDER.map(day=>`<label class="day-chip"><input type="checkbox" data-day="${day}" ${output.scheduleDays.includes(day)?'checked':''}><span>${C.DAY_NAMES[day]}</span></label>`).join('');
+    return `<div class="schedule-editor"><div class="schedule-time-row"><label class="field"><span>Start</span><input type="time" data-field="scheduleStart" data-lockable value="${C.esc(output.scheduleStart)}"></label><span class="arrow">→</span><label class="field"><span>End</span><input type="time" data-field="scheduleEnd" data-lockable value="${C.esc(output.scheduleEnd)}"></label><div class="derived-period"><span>Calculated period</span><strong>${C.duration(C.nominalScheduleSeconds(output.scheduleStart,output.scheduleEnd))}</strong></div></div><div class="schedule-days" aria-label="Applicable weekdays">${dayChips}</div><div class="schedule-presets"><button type="button" data-days-preset="weekdays">Weekdays</button><button type="button" data-days-preset="mon-sat">Mon–Sat</button><button type="button" data-days-preset="all">Every day</button></div><small>For an overnight period, the selected weekday is the day on which the period starts.</small></div>`;
   }
 
   function renderOutputs(){
-    $('olist').innerHTML='';
-
+    $('outputList').innerHTML='';
     for(const output of outputs){
       C.normalizeOutput(output);
-      const expected=acquisitionSec?Math.round(output.periodSeconds/acquisitionSec).toLocaleString():'—';
-      const daysLabel=calendarDaysLabel(output.calendarDays);
-      const outputLabel=output.mode==='rolling'
-        ?`every ${C.duration(output.stepSeconds)}`
-        :output.mode==='fixed'
-          ?`every ${C.duration(output.periodSeconds)}`
-          :`${output.calendarStart}–${output.calendarEnd} · ${daysLabel}`;
-      const summary=`${C.duration(output.periodSeconds)} ${output.mode} · output ${outputLabel} · ${expected} source value${expected==='1'?'':'s'}`;
+      const card=document.createElement('article');card.className=`output-card${output.active?'':' inactive'}`;card.dataset.outputId=output.id;
+      const windowFields=output.mode==='calendar'?`<div class="field read-only-field"><span>Calculation window</span><strong>${C.duration(output.periodSeconds)}</strong><small>Derived automatically from start and end time.</small></div>`:`<label class="field"><span>Calculation window</span><div class="inline-control"><input type="number" min="1" data-field="duration" data-lockable value="${output.duration}"><select data-field="unit" data-lockable><option value="s" ${output.unit==='s'?'selected':''}>Seconds</option><option value="min" ${output.unit==='min'?'selected':''}>Minutes</option><option value="h" ${output.unit==='h'?'selected':''}>Hours</option></select></div></label>`;
+      const rollingFields=output.mode==='rolling'?`<label class="field"><span>Output interval</span><div class="inline-control"><input type="number" min="1" data-field="step" data-lockable value="${output.step}"><select data-field="stepUnit" data-lockable><option value="s" ${output.stepUnit==='s'?'selected':''}>Seconds</option><option value="min" ${output.stepUnit==='min'?'selected':''}>Minutes</option><option value="h" ${output.stepUnit==='h'?'selected':''}>Hours</option></select></div></label>`:`<div class="field read-only-field"><span>Output interval</span><strong>${output.mode==='calendar'?'One per scheduled period':C.duration(output.periodSeconds)}</strong></div>`;
+      const scheduleMode=output.mode==='calendar'?`<div class="field read-only-field"><span>Applicable schedule</span><strong>Required for Calendar mode</strong></div>`:`<label class="field"><span>Applicable schedule</span><select data-field="scheduleEnabled" data-lockable><option value="false" ${!output.scheduleEnabled?'selected':''}>All time</option><option value="true" ${output.scheduleEnabled?'selected':''}>Selected hours and days</option></select></label>`;
+      card.innerHTML=`<header class="output-card-header"><div><span class="output-status-dot"></span><strong>${C.esc(output.displayName||output.variableName)}</strong><small>${C.esc(output.sourceTemplate?`Template: ${output.sourceTemplate}`:'Custom output')}</small></div><div class="output-card-actions"><label>Active <select data-field="active" aria-label="Output active"><option value="true" ${output.active?'selected':''}>Yes</option><option value="false" ${!output.active?'selected':''}>No</option></select></label><button type="button" class="button danger small" data-remove>Remove</button></div></header><div class="output-card-body"><div class="output-main-grid"><label class="field"><span>Generated variable</span><input data-field="variableName" data-lockable value="${C.esc(output.variableName)}"></label><label class="field"><span>Display name</span><input data-field="displayName" data-lockable value="${C.esc(output.displayName)}"></label><label class="field"><span>Mode</span><select data-field="mode" data-lockable><option value="fixed" ${output.mode==='fixed'?'selected':''}>Fixed</option><option value="rolling" ${output.mode==='rolling'?'selected':''}>Rolling</option><option value="calendar" ${output.mode==='calendar'?'selected':''}>Calendar period</option></select></label>${windowFields}${rollingFields}${scheduleMode}</div>${(output.mode==='calendar'||output.scheduleEnabled)?scheduleEditor(output):''}${output.scheduleReview?'<div class="notice warning compact">This migrated schedule needs review because the former configuration did not store weekdays.</div>':''}<div class="output-summary"><span>Summary</span><strong>${C.esc(outputSummary(output))}</strong></div></div>`;
 
-      const row=document.createElement('tr');
-      row.className=`output-row${output.active?'':' is-disabled'}`;
-      row.dataset.outputId=output.id;
-      row.innerHTML=`
-        <td><input class="var" data-k="variableName" value="${C.esc(output.variableName)}"></td>
-        <td><input class="name" data-k="displayName" value="${C.esc(output.displayName)}"></td>
-        <td><div class="window-fields"><input type="number" min="1" data-k="duration" value="${output.duration}"><select data-k="unit"><option value="s" ${output.unit==='s'?'selected':''}>Seconds</option><option value="min" ${output.unit==='min'?'selected':''}>Minutes</option><option value="h" ${output.unit==='h'?'selected':''}>Hours</option></select></div></td>
-        <td><select data-k="mode"><option value="fixed" ${output.mode==='fixed'?'selected':''}>Fixed</option><option value="rolling" ${output.mode==='rolling'?'selected':''}>Rolling</option><option value="calendar" ${output.mode==='calendar'?'selected':''}>Calendar</option></select></td>
-        <td>${output.mode==='rolling'
-          ?`<div class="output-fields"><input type="number" min="1" data-k="step" value="${output.step}"><select data-k="stepUnit"><option value="s" ${output.stepUnit==='s'?'selected':''}>Seconds</option><option value="min" ${output.stepUnit==='min'?'selected':''}>Minutes</option><option value="h" ${output.stepUnit==='h'?'selected':''}>Hours</option></select></div>`
-          :`<span class="cell-note">${output.mode==='fixed'?C.duration(output.periodSeconds):'One per selected day'}</span>`}</td>
-        <td>${output.mode==='calendar'?calendarDayControls(output):'—'}</td>
-        <td class="active-cell"><select data-k="active" aria-label="Active output"><option value="true" ${output.active?'selected':''}>Yes</option><option value="false" ${!output.active?'selected':''}>No</option></select></td>
-        <td><div class="summary">${C.esc(summary)}</div></td>
-        <td class="action-cell"><button class="btn small danger" data-remove="${output.id}">Remove</button></td>`;
-
-      row.querySelectorAll('[data-k]').forEach(input=>{
-        if(input.dataset.k!=='active')input.disabled=!output.active;
-        input.addEventListener('change',()=>{
-          let value=input.value;
-          if(['duration','step'].includes(input.dataset.k))value=Number(value)||1;
-          if(input.dataset.k==='active')value=value==='true';
-          output[input.dataset.k]=value;
-          renderOutputs();
-          updateExecutionUI();
-          persist();
-        });
-      });
-
-      row.querySelectorAll('[data-day]').forEach(input=>{
-        input.disabled=!output.active;
-        input.addEventListener('change',()=>{
-          const chosen=[...row.querySelectorAll('[data-day]:checked')].map(item=>Number(item.dataset.day));
-          if(!chosen.length){
-            input.checked=true;
-            return;
-          }
-          output.calendarDays=chosen;
-          renderOutputs();
-          updateExecutionUI();
-          persist();
-        });
-      });
-
-      row.querySelectorAll('[data-calendar-preset]').forEach(button=>{
-        button.disabled=!output.active;
-        button.addEventListener('click',()=>{
-          output.calendarDays=button.dataset.calendarPreset==='weekdays'?WEEKDAYS.slice():EVERY_DAY.slice();
-          renderOutputs();
-          updateExecutionUI();
-          persist();
-        });
-      });
-
-      row.querySelector('[data-remove]').addEventListener('click',()=>{
-        outputs=outputs.filter(item=>item.id!==output.id);
-        renderOutputs();
-        updateExecutionUI();
-        persist();
-      });
-
-      $('olist').appendChild(row);
+      card.querySelectorAll('[data-lockable]').forEach(control=>{control.disabled=!output.active;});card.querySelectorAll('[data-day]').forEach(control=>{control.disabled=!output.active;});card.querySelectorAll('[data-days-preset]').forEach(control=>{control.disabled=!output.active;});
+      card.querySelectorAll('[data-field]').forEach(control=>control.addEventListener('change',()=>{const field=control.dataset.field;let value=control.value;if(['duration','step'].includes(field))value=Math.max(1,Number(value)||1);if(['active','scheduleEnabled'].includes(field))value=value==='true';output[field]=value;if(field==='mode'){output.scheduleEnabled=value==='calendar'?true:Boolean(output.scheduleEnabled);if(value==='calendar'&&output.scheduleStart===output.scheduleEnd&&output.scheduleStart==='00:00'){output.scheduleStart='07:00';output.scheduleEnd='17:00';}}if(field==='scheduleStart'||field==='scheduleEnd'||field==='mode')output.scheduleReview=false;C.normalizeOutput(output);renderOutputs();updateExecutionUI();persist();}));
+      card.querySelectorAll('[data-day]').forEach(control=>control.addEventListener('change',()=>{const selected=[...card.querySelectorAll('[data-day]:checked')].map(item=>Number(item.dataset.day));if(!selected.length){control.checked=true;return;}output.scheduleDays=selected;output.scheduleReview=false;renderOutputs();updateExecutionUI();persist();}));
+      card.querySelectorAll('[data-days-preset]').forEach(button=>button.addEventListener('click',()=>{output.scheduleDays=button.dataset.daysPreset==='weekdays'?C.WEEKDAYS.slice():button.dataset.daysPreset==='mon-sat'?C.MON_SAT.slice():C.ALL_DAYS.slice();output.scheduleReview=false;renderOutputs();updateExecutionUI();persist();}));
+      card.querySelector('[data-remove]').addEventListener('click',()=>{outputs=outputs.filter(item=>item.id!==output.id);if(state.lastCalculatedByOutput)delete state.lastCalculatedByOutput[output.id];renderOutputs();updateExecutionUI();persist();});
+      $('outputList').appendChild(card);
     }
-
-    const activeCount=outputs.filter(output=>output.active).length;
-    $('topOutputs').value=`${activeCount} active / ${outputs.length} variables`;
-    $('ocount').textContent=activeCount;
-    $('conceptAcq').textContent=acquisitionSec
-      ?`Detected source interval: one value every ${C.duration(acquisitionSec)}.`
-      :'How often one input value is stored. It is estimated after source selection.';
+    const activeCount=outputs.filter(output=>output.active).length;$('outputCount').textContent=`${activeCount} active / ${outputs.length} configured`;$('activeOutputCount').textContent=activeCount;
   }
 
-  function executionPlan(){
-    const recommendation=C.recommendedExecution(outputs,acquisitionSec);
-    const selectedSeconds=executionMode()==='event'?recommendation.batchSeconds:customRunSeconds();
-    return {recommendation,selectedSeconds};
-  }
-
-  function latestCompleteBoundary(batchSeconds){
-    if(!points.length||!acquisitionSec||!batchSeconds)return null;
-    const available=C.availableThrough(points,acquisitionSec);
-    return Math.floor(available/(batchSeconds*1000))*batchSeconds*1000;
-  }
+  function renderTemplateOptions(){const templates=C.templateList();$('templateSelect').innerHTML=templates.map(template=>`<option value="${template.id}">${C.esc(template.name)}</option>`).join('');$('templateSelect').value=state.templateId&&C.getTemplate(state.templateId)?state.templateId:'basic';renderTemplateDescription();}
+  function renderTemplateDescription(){const template=C.getTemplate($('templateSelect').value);$('templateDescription').innerHTML=template?`<strong>${C.esc(template.description)}</strong><span>Timezone: ${C.esc(template.timeZone)}. ${C.esc(template.note)}</span>`:'';}
+  function applySelectedTemplate(){const template=C.getTemplate($('templateSelect').value);if(!template)return;outputs=template.outputs.map(output=>C.normalizeOutput(output));state.templateId=template.id;state.lastCalculatedByOutput={};$('timeZone').value=template.timeZone;results=[];$('resultTable').innerHTML='';$('resultCount').textContent='0';$('runStatus').textContent='Waiting';renderOutputs();updateExecutionUI();persist();}
+  function executionMode(){return $('customExecution').checked?'custom':'smart';}
+  function customFrequencySeconds(){const value=Number($('customFrequency').value);return Number.isFinite(value)&&value>0?C.seconds(value,$('customFrequencyUnit').value):null;}
 
   function updateExecutionUI(){
-    outputs.forEach(C.normalizeOutput);
-    const mode=executionMode();
-    const {recommendation,selectedSeconds}=executionPlan();
-
-    $('eventChoice').classList.toggle('selected',mode==='event');
-    $('customChoice').classList.toggle('selected',mode==='custom');
-    $('customPanel').hidden=mode!=='custom';
-    $('latePanel').hidden=$('recalcLate').value!=='yes';
-
-    $('recommendedBatch').textContent=recommendation.batchSeconds?C.duration(recommendation.batchSeconds):'—';
-
-    const activeOutputs=outputs.filter(output=>output.active);
-    const possibleResults=recommendation.batchSeconds
-      ?activeOutputs.reduce((sum,output)=>sum+C.outputsPerRun(output,recommendation.batchSeconds),0)
-      :0;
-    const sourceLabel=acquisitionSec?C.duration(acquisitionSec):'not detected';
-
-    if(mode==='event'){
-      $('executionSummary').innerHTML=`
-        <div><span>Source acquisition</span><b>${C.esc(sourceLabel)}</b></div>
-        <div><span>Recommended check interval</span><b>${recommendation.batchSeconds?`Every ${C.esc(C.duration(recommendation.batchSeconds))}`:'No active output'}</b></div>
-        <div><span>Results per execution</span><b>Up to ${possibleResults}</b></div>
-        <p>New data marks the processing as ready. BTM waits until a complete boundary is available, then calculates all pending results in one execution.</p>`;
-    }else if(selectedSeconds){
-      const launches=Math.ceil(86400/selectedSeconds);
-      $('executionSummary').innerHTML=`
-        <div><span>Source acquisition</span><b>${C.esc(sourceLabel)}</b></div>
-        <div><span>Custom run</span><b>Every ${C.esc(C.duration(selectedSeconds))}</b></div>
-        <div><span>Estimated launches</span><b>About ${launches.toLocaleString()}/day</b></div>
-        <p>Each run checks the database. If no complete new period is available, it is skipped without changing outputs.</p>`;
-    }else{
-      $('executionSummary').innerHTML=`
-        <div><span>Source acquisition</span><b>${C.esc(sourceLabel)}</b></div>
-        <div><span>Recommended batch</span><b>${C.esc(C.duration(recommendation.batchSeconds))}</b></div>
-        <div><span>Custom schedule</span><b>Not configured</b></div>
-        <p>Enter the interval above. BTM will still skip runs when no complete new period is available.</p>`;
-    }
-
-    const warnings=[...(recommendation.warnings||[])];
-    if(mode==='custom'){
-      if(!selectedSeconds){
-        warnings.unshift('Enter a custom run interval. No value is automatically proposed.');
-      }else{
-        if(recommendation.batchSeconds&&selectedSeconds<recommendation.batchSeconds){
-          const ratio=Math.ceil(recommendation.batchSeconds/selectedSeconds);
-          warnings.push(`This custom interval may launch the calculation about ${ratio} times more often than the recommended ${C.duration(recommendation.batchSeconds)} batch.`);
-        }
-        if(recommendation.batchSeconds&&selectedSeconds>recommendation.batchSeconds){
-          warnings.push(`Results may be delayed by up to ${C.duration(selectedSeconds-recommendation.batchSeconds)}. Catch-up will still create complete missing periods.`);
-        }
-        if(acquisitionSec&&selectedSeconds<acquisitionSec){
-          warnings.push(`The custom interval is faster than source acquisition (${C.duration(acquisitionSec)}), so many runs may be skipped.`);
-        }
-      }
-    }
-
-    if(warnings.length){
-      $('warning').innerHTML=`<div class="warn">${warnings.map(C.esc).join('<br>')}</div>`;
-    }else{
-      $('warning').innerHTML=mode==='event'
-        ?'<div class="ok">Recommended setup: calculations are batched and only complete periods are processed.</div>'
-        :'<div class="ok">The custom schedule is valid.</div>';
-    }
-
-    if(points.length&&acquisitionSec){
-      const lastMeasurement=points.at(-1).t;
-      const available=C.availableThrough(points,acquisitionSec);
-      const boundary=latestCompleteBoundary(recommendation.batchSeconds);
-      $('readiness').innerHTML=`<b>Database timestamps:</b> latest measurement ${C.fmt(lastMeasurement)} · estimated available through ${C.fmt(available)}${boundary?` · latest complete recommended boundary ${C.fmt(boundary)}`:''}. These are measurement timestamps, not arrival timestamps.`;
-    }else{
-      $('readiness').textContent='Load source data to inspect the latest available measurement timestamp.';
-    }
-
-    renderAdministration();
+    const recommendation=C.recommendedExecution(outputs,acquisitionSeconds),mode=executionMode(),selectedSeconds=mode==='smart'?recommendation.batchSeconds:customFrequencySeconds();$('smartChoice').classList.toggle('selected',mode==='smart');$('customChoice').classList.toggle('selected',mode==='custom');$('customExecutionPanel').hidden=mode!=='custom';$('recommendedCheck').textContent=recommendation.batchSeconds?C.duration(recommendation.batchSeconds):'—';
+    const sourceLabel=acquisitionSeconds?C.duration(acquisitionSeconds):'Not detected',possibleResults=recommendation.batchSeconds?outputs.filter(output=>output.active).reduce((sum,output)=>sum+C.outputsPerRun(output,recommendation.batchSeconds),0):0;
+    if(mode==='smart')$('executionSummary').innerHTML=`<div><span>Source acquisition</span><strong>${C.esc(sourceLabel)}</strong></div><div><span>Recommended check interval</span><strong>${recommendation.batchSeconds?`Every ${C.esc(C.duration(recommendation.batchSeconds))}`:'No active output'}</strong></div><div><span>Results per execution</span><strong>Up to ${possibleResults}</strong></div><p>BTM waits until at least one configured period is complete, then calculates all pending results in one execution.</p>`;
+    else if(selectedSeconds)$('executionSummary').innerHTML=`<div><span>Source acquisition</span><strong>${C.esc(sourceLabel)}</strong></div><div><span>Custom run</span><strong>Every ${C.esc(C.duration(selectedSeconds))}</strong></div><div><span>Estimated checks</span><strong>About ${Math.ceil(86400/selectedSeconds).toLocaleString()}/day</strong></div><p>Each check reads the latest database timestamp. If no complete period is available, it is skipped.</p>`;
+    else $('executionSummary').innerHTML=`<div><span>Source acquisition</span><strong>${C.esc(sourceLabel)}</strong></div><div><span>Recommended check</span><strong>${C.esc(C.duration(recommendation.batchSeconds))}</strong></div><div><span>Custom schedule</span><strong>Not configured</strong></div><p>Enter a custom interval before saving.</p>`;
+    const warnings=[...(recommendation.warnings||[])];if(mode==='custom'){if(!selectedSeconds)warnings.unshift('Enter a custom run interval. No value is proposed automatically.');else if(recommendation.batchSeconds&&selectedSeconds<recommendation.batchSeconds)warnings.push(`This schedule checks approximately ${Math.ceil(recommendation.batchSeconds/selectedSeconds)} times more often than the recommended interval.`);}
+    $('executionWarning').innerHTML=warnings.length?`<div class="notice warning">${warnings.map(C.esc).join('<br>')}</div>`:'<div class="notice success">The execution configuration is consistent with the active calculation windows.</div>';renderAdministration();
   }
 
-  function refreshSource(){
-    if(!parsed)return;
-    points=C.makePoints(parsed,$('tc').value,$('vc').value);
-    acquisitionSec=C.inferAcquisition(points);
-    $('selected').className='info';
-    $('selected').innerHTML=`<b>Selected variable:</b> ${C.esc(currentVariableName())} · <b>Format:</b> ${C.esc(parsed.format)} · <b>Estimated acquisition:</b> ${C.duration(acquisitionSec)} from recent timestamp gaps.`;
-    $('preview').innerHTML=points.slice(0,8).map(point=>`<tr><td>${C.fmt(point.t)}</td><td>${point.v}</td></tr>`).join('');
-    $('srows').textContent=parsed.rows.length;
-    $('vrows').textContent=points.length;
-    $('acq').textContent=C.duration(acquisitionSec);
-    renderOutputs();
-    updateExecutionUI();
-  }
-
-  $('file').addEventListener('change',event=>{
-    const selectedFile=event.target.files[0];
-    if(!selectedFile)return;
-    const reader=new FileReader();
-    reader.onload=()=>{
-      try{
-        parsed=C.parseSource(reader.result,selectedFile.name);
-        $('fname').textContent=selectedFile.name;
-        $('format').value=parsed.format;
-        const options=parsed.columns.map(column=>`<option value="${column.index}">${C.esc(column.name)}</option>`).join('');
-        $('tc').innerHTML=options;
-        $('vc').innerHTML=options;
-        $('tc').value=parsed.timeIndex;
-        $('vc').value=parsed.valueIndex;
-        refreshSource();
-      }catch(error){
-        $('selected').className='warn';
-        $('selected').textContent=error.message;
-      }
-    };
-    reader.readAsText(selectedFile,'ISO-8859-1');
-  });
-
-  $('tc').addEventListener('change',refreshSource);
-  $('vc').addEventListener('change',refreshSource);
-
-  $('add').addEventListener('click',()=>{
-    outputs.push({id:`out${Date.now()}`,variableName:'Noise_LAeq_custom',displayName:'LAeq custom',duration:30,unit:'min',mode:'fixed',step:30,stepUnit:'min',calendarStart:'07:00',calendarEnd:'17:00',calendarDays:EVERY_DAY.slice(),active:true});
-    renderOutputs();
-    updateExecutionUI();
-    persist();
-  });
-
-  ['execEvent','execCustom','fcustom','fcustomUnit','coverage','catchup','recalcLate','late','active','pname'].forEach(id=>{
-    $(id).addEventListener(id==='pname'||id==='fcustom'?'input':'change',()=>{
-      updateExecutionUI();
-      persist();
-    });
-  });
+  function validateConfiguration(){const active=outputs.filter(output=>output.active);if(!active.length)return 'At least one LAeq output must be active.';const names=active.map(output=>output.variableName.trim());if(names.some(name=>!name))return 'Every active output needs a generated variable name.';if(new Set(names).size!==names.length)return 'Generated variable names must be unique.';for(const output of active){C.normalizeOutput(output);if(output.periodSeconds<=0)return `${output.displayName}: calculation window must be greater than zero.`;if((output.mode==='calendar'||output.scheduleEnabled)&&!C.normalizeDays(output.scheduleDays).length)return `${output.displayName}: select at least one weekday.`;if(output.mode==='rolling'&&output.stepSeconds<=0)return `${output.displayName}: output interval must be greater than zero.`;}if(executionMode()==='custom'&&!customFrequencySeconds())return 'Enter a valid custom execution interval.';return null;}
+  function currentVariableName(){return parsed?$('valueColumn').selectedOptions[0]?.textContent||'—':'—';}
+  function refreshSource(){if(!parsed)return;points=C.makePoints(parsed,$('timestampColumn').value,$('valueColumn').value,$('timeZone').value);acquisitionSeconds=C.inferAcquisition(points);$('sourceStatus').className='notice info';$('sourceStatus').innerHTML=`<strong>Selected variable:</strong> ${C.esc(currentVariableName())} · <strong>Format:</strong> ${C.esc(parsed.format)} · <strong>Estimated acquisition:</strong> ${C.duration(acquisitionSeconds)}.`;$('sourcePreview').innerHTML=points.slice(0,8).map(point=>`<tr><td>${C.fmt(point.t,$('timeZone').value)}</td><td>${point.v}</td></tr>`).join('');$('sourceRows').textContent=parsed.rows.length;$('validRows').textContent=points.length;$('acquisition').textContent=C.duration(acquisitionSeconds);updateExecutionUI();}
+  function loadSelectedFile(file){if(!file)return;const reader=new FileReader();reader.onload=()=>{try{parsed=C.parseSource(reader.result,file.name);$('fileName').textContent=file.name;$('detectedFormat').value=parsed.format;const options=parsed.columns.map(column=>`<option value="${column.index}">${C.esc(column.name)}</option>`).join('');$('timestampColumn').innerHTML=options;$('valueColumn').innerHTML=options;$('timestampColumn').value=parsed.timeIndex;$('valueColumn').value=parsed.valueIndex;refreshSource();}catch(error){$('sourceStatus').className='notice warning';$('sourceStatus').textContent=error.message;}};reader.readAsText(file,'ISO-8859-1');}
 
   function runProcessing(trigger='Manual run'){
-    if(!points.length||!acquisitionSec){
-      $('runmsg').className='warn';
-      $('runmsg').textContent='Load valid source data first.';
-      return;
-    }
-
-    const useCatchup=$('usecatch').checked&&$('catchup').value==='yes';
-    results=C.calculateAll(points,outputs,acquisitionSec,{
-      validCoverage:Number($('coverage').value)||0,
-      timestampConvention:parsed.timestampConvention,
-      lastCalculatedByOutput:useCatchup?(state.lastCalculatedByOutput||{}):{}
-    });
-
-    $('result').innerHTML=results.map(result=>`<tr><td>${C.esc(result.variableName)}</td><td>${C.esc(result.mode)}</td><td>${C.fmt(result.timestamp)}</td><td>${C.fmt(result.start)}</td><td>${C.fmt(result.end)}</td><td><b>${result.value.toFixed(2)}</b></td><td>${result.samples}</td><td>${result.expected}</td><td>${Math.min(100,result.coverage).toFixed(1)}%</td><td><span class="pill ${result.status==='Catch-up'?'info':''}">${result.status}</span></td></tr>`).join('');
-
-    const skipped=results.length===0;
-    $('rcount').textContent=results.length;
-    $('status').textContent=skipped?'Skipped':'Success';
-    $('download').disabled=skipped;
-    $('runmsg').className=skipped?'info':'ok';
-    $('runmsg').textContent=skipped
-      ?'Skipped — No new complete period available or no new source data available.'
-      :`${results.length} result(s) generated across ${new Set(results.map(result=>result.outputId)).size} output(s).`;
-
-    state.lastCalculatedByOutput||={};
-    for(const output of outputs){
-      const outputResults=results.filter(result=>result.outputId===output.id);
-      if(outputResults.length)state.lastCalculatedByOutput[output.id]=Math.max(...outputResults.map(result=>result.end));
-    }
-
-    state.lastExecution=Date.now();
-    state.lastStatus=skipped?'Skipped':'Success';
-    state.history||=[];
-    state.history.unshift({
-      t:state.lastExecution,
-      trigger,
-      n:results.length,
-      outputs:outputs.filter(output=>output.active).length,
-      status:state.lastStatus,
-      comment:skipped?'No new complete period available':'Calculation completed'
-    });
-    state.history=state.history.slice(0,30);
-    persist();
-    renderAdministration();
+    const validation=validateConfiguration();if(validation){$('runMessage').className='notice warning';$('runMessage').textContent=validation;return;}if(!points.length||!acquisitionSeconds){$('runMessage').className='notice warning';$('runMessage').textContent='Load valid source data first.';return;}
+    const useCatchup=$('manualCatchup').checked&&$('catchup').value==='yes';results=C.calculateAll(points,outputs,acquisitionSeconds,{validCoverage:Number($('coverage').value)||0,timestampConvention:parsed.timestampConvention,timeZone:$('timeZone').value,lastCalculatedByOutput:useCatchup?(state.lastCalculatedByOutput||{}):{}});const timeZone=$('timeZone').value;
+    $('resultTable').innerHTML=results.map(result=>`<tr><td>${C.esc(result.variableName)}</td><td>${C.esc(result.mode)}</td><td>${C.fmt(result.timestamp,timeZone)}</td><td>${C.fmt(result.start,timeZone)}</td><td>${C.fmt(result.end,timeZone)}</td><td><strong>${result.value.toFixed(2)}</strong></td><td>${result.samples}</td><td>${result.expected}</td><td>${Math.min(100,result.coverage).toFixed(1)}%</td><td><span class="pill ${result.status==='Catch-up'?'info':''}">${result.status}</span></td></tr>`).join('');
+    const skipped=results.length===0;$('resultCount').textContent=results.length;$('runStatus').textContent=skipped?'Skipped':'Success';$('downloadResults').disabled=skipped;$('runMessage').className=`notice ${skipped?'info':'success'}`;$('runMessage').textContent=skipped?'Skipped — No new complete period available.':`${results.length} result(s) generated across ${new Set(results.map(result=>result.outputId)).size} output(s).`;
+    state.lastCalculatedByOutput||={};for(const output of outputs){const outputResults=results.filter(result=>result.outputId===output.id);if(outputResults.length)state.lastCalculatedByOutput[output.id]=Math.max(...outputResults.map(result=>result.end));}
+    state.lastExecution=Date.now();state.lastStatus=skipped?'Skipped':'Success';state.history||=[];state.history.unshift({timestamp:state.lastExecution,trigger,status:state.lastStatus,resultCount:results.length,outputCount:outputs.filter(output=>output.active).length,comment:skipped?'No new complete period available':'Calculation completed'});state.history=state.history.slice(0,30);persist();renderAdministration();
   }
 
-  $('runbtn').addEventListener('click',()=>runProcessing());
+  function executionLabel(){const recommendation=C.recommendedExecution(outputs,acquisitionSeconds);if(executionMode()==='smart')return recommendation.batchSeconds?`Smart · every ${C.duration(recommendation.batchSeconds)}`:'Smart · waiting for outputs';const custom=customFrequencySeconds();return custom?`Custom · every ${C.duration(custom)}`:'Custom · incomplete';}
+  function renderAdministration(){if(!$('processingList'))return;const status=$('processingActive').value==='no'?'Inactive':state.lastStatus||'Not executed';$('processingList').innerHTML=`<tr><td><strong>${C.esc($('processingName').value||'Untitled')}</strong></td><td>${C.esc(currentVariableName())}</td><td>${outputs.filter(output=>output.active).length} active / ${outputs.length}</td><td>${C.esc($('timeZone').value)}</td><td>${C.esc(executionLabel())}</td><td><span class="pill ${/Inactive|Skipped|Not/.test(status)?'wait':''}">${C.esc(status)}</span></td><td><button class="button small" id="editProcessing">Edit</button></td></tr>`;$('editProcessing').addEventListener('click',showDetails);}
+  function showDetails(){const details=$('processingDetails');details.hidden=false;const timeZone=$('timeZone').value,outputRows=outputs.map(output=>{C.normalizeOutput(output);const last=state.lastCalculatedByOutput?.[output.id];return `<tr><td><strong>${C.esc(output.variableName)}</strong></td><td>${C.esc(outputSummary(output))}</td><td>${last?C.fmt(last,timeZone):'Never'}</td><td><span class="pill ${output.active?'':'wait'}">${output.active?'Active':'Inactive'}</span></td></tr>`;}).join(''),historyRows=(state.history||[]).map(item=>`<tr><td>${new Date(item.timestamp).toLocaleString()}</td><td>${C.esc(item.trigger)}</td><td>${item.resultCount}</td><td><span class="pill ${item.status==='Skipped'?'wait':''}">${C.esc(item.status)}</span></td><td>${C.esc(item.comment)}</td></tr>`).join('')||'<tr><td colspan="5">No execution yet.</td></tr>';
+    details.innerHTML=`<div class="details-header"><div><h3>${C.esc($('processingName').value)}</h3><p>${C.esc($('timeZone').value)} · ${C.esc(executionLabel())}</p></div><div><button class="button small" id="editOutputs">Edit outputs</button> <button class="button small warning-button" id="manualFromAdmin">Manual run</button> <button class="button small" id="closeDetails">Close</button></div></div><h3>Generated variables</h3><div class="table-wrap"><table><thead><tr><th>Variable</th><th>Calculation</th><th>Last calculated end</th><th>Status</th></tr></thead><tbody>${outputRows}</tbody></table></div><h3>Execution history</h3><div class="table-wrap"><table><thead><tr><th>Time</th><th>Trigger</th><th>Results</th><th>Status</th><th>Comment</th></tr></thead><tbody>${historyRows}</tbody></table></div>`;$('editOutputs').addEventListener('click',()=>activatePanel('outputs'));$('manualFromAdmin').addEventListener('click',()=>activatePanel('manual'));$('closeDetails').addEventListener('click',()=>{details.hidden=true;});
+  }
+  function downloadResults(){const timeZone=$('timeZone').value,header='variable,mode,timestamp,start,end,LAeq_dBA,samples,expected,coverage,type',body=results.map(result=>[result.variableName,result.mode,C.fmt(result.timestamp,timeZone),C.fmt(result.start,timeZone),C.fmt(result.end,timeZone),result.value.toFixed(3),result.samples,result.expected,result.coverage.toFixed(2),result.status].join(',')),link=document.createElement('a');link.href=URL.createObjectURL(new Blob([[header,...body].join('\n')],{type:'text/csv'}));link.download='btm_laeq_results.csv';link.click();URL.revokeObjectURL(link.href);}
 
-  $('download').addEventListener('click',()=>{
-    const header='variable,mode,timestamp,start,end,LAeq_dBA,samples,expected,coverage,type';
-    const body=results.map(result=>[result.variableName,result.mode,C.fmt(result.timestamp),C.fmt(result.start),C.fmt(result.end),result.value.toFixed(3),result.samples,result.expected,result.coverage.toFixed(2),result.status].join(','));
-    const link=document.createElement('a');
-    link.href=URL.createObjectURL(new Blob([[header,...body].join('\n')],{type:'text/csv'}));
-    link.download='btm_laeq_v3_results.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
-  });
-
-  function currentExecutionLabel(){
-    const recommendation=C.recommendedExecution(outputs,acquisitionSec);
-    if(executionMode()==='event')return `Smart event-driven · ${C.duration(recommendation.batchSeconds)} batch`;
-    const custom=customRunSeconds();
-    return custom?`Custom · every ${C.duration(custom)}`:'Custom · not configured';
+  function bindEvents(){
+    document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>activatePanel(tab.dataset.panel)));$('templateSelect').addEventListener('change',renderTemplateDescription);$('applyTemplate').addEventListener('click',applySelectedTemplate);
+    $('addOutput').addEventListener('click',()=>{outputs.push(C.normalizeOutput({id:`custom-${Date.now()}`,variableName:'Noise_LAeq_custom',displayName:'Custom LAeq',mode:'fixed',duration:30,unit:'min',step:30,stepUnit:'min',scheduleEnabled:false,scheduleStart:'07:00',scheduleEnd:'19:00',scheduleDays:C.ALL_DAYS.slice(),active:true}));state.templateId='basic';renderOutputs();updateExecutionUI();persist();});
+    $('sourceFile').addEventListener('change',event=>loadSelectedFile(event.target.files[0]));const upload=document.querySelector('.upload-zone');['dragenter','dragover'].forEach(type=>upload.addEventListener(type,event=>{event.preventDefault();upload.classList.add('dragging');}));['dragleave','drop'].forEach(type=>upload.addEventListener(type,event=>{event.preventDefault();upload.classList.remove('dragging');}));upload.addEventListener('drop',event=>loadSelectedFile(event.dataTransfer.files[0]));$('timestampColumn').addEventListener('change',refreshSource);$('valueColumn').addEventListener('change',refreshSource);
+    ['smartExecution','customExecution','customFrequency','customFrequencyUnit','coverage','catchup','processingActive','processingName','timeZone'].forEach(id=>{$(id).addEventListener(['customFrequency','processingName'].includes(id)?'input':'change',()=>{if(id==='timeZone'&&points.length)refreshSource();updateExecutionUI();persist();});});
+    $('runNow').addEventListener('click',()=>runProcessing());$('downloadResults').addEventListener('click',downloadResults);
+    $('saveProcessing').addEventListener('click',()=>{const validation=validateConfiguration();if(validation){activatePanel(validation.includes('execution')?'execution':'outputs');if(validation.includes('execution'))$('executionWarning').innerHTML=`<div class="notice warning">${C.esc(validation)}</div>`;else window.alert(validation);return;}persist();activatePanel('admin');showDetails();});
+    $('resetApp').addEventListener('click',()=>{if(window.confirm('Reset the LAeq processing configuration and calculation state?')){localStorage.removeItem(STORAGE_KEY);location.reload();}});
   }
 
-  function processingRows(){
-    return [
-      {id:'current',name:$('pname').value||'Untitled processing',source:currentVariableName(),outputs:outputs.length,execution:currentExecutionLabel(),last:state.lastExecution?new Date(state.lastExecution).toLocaleString():'Never',status:$('active').value==='No'?'Inactive':state.lastStatus||'Never executed'},
-      {id:'sample1',name:'Tarmac quarry noise',source:'CUBE / LAeq',outputs:2,execution:'Smart event-driven · 15 min batch',last:'2026-07-10 11:00',status:'Healthy'},
-      {id:'sample2',name:'Night-time monitoring',source:'Micromate / Mic Leq',outputs:1,execution:'Custom · every 1 h',last:'Waiting',status:'Waiting for data'}
-    ];
-  }
-
-  function renderAdministration(){
-    if(!$('plist'))return;
-    $('plist').innerHTML=processingRows().map(processing=>`<tr><td><b>${C.esc(processing.name)}</b></td><td>${C.esc(processing.source)}</td><td>${processing.outputs}</td><td>${C.esc(processing.execution)}</td><td>${C.esc(processing.last)}</td><td><span class="pill ${/Waiting|Skipped|Never/.test(processing.status)?'wait':''}">${C.esc(processing.status)}</span></td><td><button class="btn small" data-edit="${processing.id}">Edit</button></td></tr>`).join('');
-    document.querySelectorAll('[data-edit]').forEach(button=>button.addEventListener('click',()=>showDetails(button.dataset.edit)));
-  }
-
-  function showDetails(id){
-    const box=$('pdetails');
-    box.hidden=false;
-
-    if(id!=='current'){
-      const processing=processingRows().find(item=>item.id===id);
-      box.innerHTML=`<div class="details-head"><div><h3>${C.esc(processing.name)}</h3><div class="help">Example processing. In production, Edit opens its full source, outputs and execution configuration.</div></div><button class="btn small" id="closeDetails">Close</button></div>`;
-      $('closeDetails').addEventListener('click',()=>{box.hidden=true;});
-      return;
-    }
-
-    const outputRows=outputs.map(output=>{
-      C.normalizeOutput(output);
-      const last=state.lastCalculatedByOutput?.[output.id];
-      const expected=acquisitionSec?Math.round(output.periodSeconds/acquisitionSec):'—';
-      const calculation=output.mode==='calendar'
-        ?`${output.calendarStart}–${output.calendarEnd} · ${calendarDaysLabel(output.calendarDays)}`
-        :`${output.mode} ${C.duration(output.periodSeconds)} · output ${output.mode==='rolling'?C.duration(output.stepSeconds):C.duration(output.outputIntervalSeconds)}`;
-      return `<tr><td><b>${C.esc(output.variableName)}</b></td><td>${C.esc(calculation)}</td><td>${expected}</td><td>${last?C.fmt(last):'Never'}</td><td><span class="pill ${output.active?'':'wait'}">${output.active?(last?'Up to date':'Waiting'):'Disabled'}</span></td></tr>`;
-    }).join('');
-
-    const historyRows=(state.history||[]).map(item=>`<tr><td>${new Date(item.t).toLocaleString()}</td><td>${C.esc(item.trigger)}</td><td>${item.n}</td><td>${item.outputs}</td><td><span class="pill ${item.status==='Skipped'?'wait':''}">${C.esc(item.status)}</span></td><td>${C.esc(item.comment||'—')}</td></tr>`).join('')||'<tr><td colspan="6">No execution yet.</td></tr>';
-    const recommendation=C.recommendedExecution(outputs,acquisitionSec);
-
-    box.innerHTML=`
-      <div class="details-head"><div><h3>Edit — ${C.esc($('pname').value)}</h3><div class="help">All processing details are displayed after Edit.</div></div><div><button id="editOutputs" class="btn small">Edit outputs</button> <button id="manualFromAdmin" class="btn small yellow">Manual run</button> <button id="clearState" class="btn small danger">Reset state</button></div></div>
-      <div class="stats admin-stats"><div class="stat"><span>Source</span><b>${C.esc(currentVariableName())}</b></div><div class="stat"><span>Acquisition</span><b>${C.duration(acquisitionSec)}</b></div><div class="stat"><span>Execution</span><b>${C.esc(currentExecutionLabel())}</b></div><div class="stat"><span>Recommended batch</span><b>${C.duration(recommendation.batchSeconds)}</b></div><div class="stat"><span>Catch-up</span><b>${$('catchup').value==='yes'?'Enabled':'Disabled'}</b></div><div class="stat"><span>Last status</span><b>${state.lastStatus||'Never executed'}</b></div></div>
-      <h3 class="section-title">Generated variables</h3><div class="tw"><table><thead><tr><th>Variable</th><th>Window / output interval</th><th>Expected values</th><th>Last calculated end</th><th>Status</th></tr></thead><tbody>${outputRows}</tbody></table></div>
-      <h3 class="section-title">Execution history</h3><div class="tw"><table><thead><tr><th>Time</th><th>Trigger</th><th>Results</th><th>Outputs checked</th><th>Status</th><th>Comment</th></tr></thead><tbody>${historyRows}</tbody></table></div>`;
-
-    $('editOutputs').addEventListener('click',()=>activateTab('outputs'));
-    $('manualFromAdmin').addEventListener('click',()=>activateTab('run'));
-    $('clearState').addEventListener('click',()=>{
-      state.lastCalculatedByOutput={};
-      state.lastExecution=null;
-      state.lastStatus=null;
-      state.history=[];
-      persist();
-      showDetails('current');
-    });
-  }
-
-  $('save').addEventListener('click',()=>{
-    if(executionMode()==='custom'&&!customRunSeconds()){
-      activateTab('quality');
-      $('warning').innerHTML='<div class="warn">Enter a valid custom run interval before saving.</div>';
-      $('fcustom').focus();
-      return;
-    }
-    persist();
-    activateTab('admin');
-  });
-
-  $('reset').addEventListener('click',()=>{
-    if(confirm('Reset V3 mockup configuration and execution state?')){
-      localStorage.removeItem(KEY);
-      location.reload();
-    }
-  });
-
-  renderOutputs();
-  updateExecutionUI();
-  renderAdministration();
+  setInitialValues();renderTemplateOptions();bindEvents();renderOutputs();updateExecutionUI();renderAdministration();
 })();
