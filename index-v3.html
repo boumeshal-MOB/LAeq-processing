@@ -144,6 +144,12 @@
   </div>
 </div>
 
+<script>
+  // Preserve the current mockup configuration while introducing calendar-day settings.
+  if(!localStorage.getItem('btm-laeq-v3-admin-v4')&&localStorage.getItem('btm-laeq-v3-admin-v3')){
+    localStorage.setItem('btm-laeq-v3-admin-v4',localStorage.getItem('btm-laeq-v3-admin-v3'));
+  }
+</script>
 <script src="v3-core.js"></script>
 <script src="v3-app.js"></script>
 </body>
