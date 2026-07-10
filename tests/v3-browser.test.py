@@ -14,7 +14,10 @@ def check(condition: bool, message: str) -> None:
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True, executable_path="/usr/bin/chromium", args=["--no-sandbox"])
+    launch_options = {"headless": True}
+    if Path("/usr/bin/chromium").exists():
+        launch_options.update({"executable_path": "/usr/bin/chromium", "args": ["--no-sandbox"]})
+    browser = p.chromium.launch(**launch_options)
     page = browser.new_page(viewport={"width": 1440, "height": 1000})
     console_errors: list[str] = []
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
