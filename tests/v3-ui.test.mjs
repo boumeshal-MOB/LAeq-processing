@@ -33,10 +33,13 @@ const checks=[
   [css,'.output-table{min-width:1550px'],
   [app,'Skipped — No new complete period available or no new source data available'],
   [app,'state.lastCalculatedByOutput'],
-  [app,"executionMode()==='custom'"]
+  [app,"executionMode()==='custom'"],
+  [app,'New data marks the processing as ready'],
+  [app,'Results per execution']
 ];
 
 for(const [source,needle] of checks)assert.ok(source.includes(needle),`Missing expected UI marker: ${needle}`);
 assert.ok(!html.includes('id="fcustom" type="number" min="1" value="15"'),'Custom run interval must not be prefilled.');
+assert.ok(!/python/i.test(app),'User-facing execution copy must remain implementation-agnostic.');
 
-console.log(`PASS: ${checks.length+1} LAeq V3 UI and behaviour checks`);
+console.log(`PASS: ${checks.length+2} LAeq V3 UI and behaviour checks`);

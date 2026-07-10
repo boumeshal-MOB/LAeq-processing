@@ -221,9 +221,9 @@
     if(mode==='event'){
       $('executionSummary').innerHTML=`
         <div><span>Source acquisition</span><b>${C.esc(sourceLabel)}</b></div>
-        <div><span>Calculation check</span><b>${recommendation.batchSeconds?`Every ${C.esc(C.duration(recommendation.batchSeconds))}`:'No active output'}</b></div>
-        <div><span>Possible outputs per run</span><b>Up to ${possibleResults}</b></div>
-        <p>New data does not start Python immediately. BTM waits for a complete boundary, then calculates all missing results in one run.</p>`;
+        <div><span>Recommended check interval</span><b>${recommendation.batchSeconds?`Every ${C.esc(C.duration(recommendation.batchSeconds))}`:'No active output'}</b></div>
+        <div><span>Results per execution</span><b>Up to ${possibleResults}</b></div>
+        <p>New data marks the processing as ready. BTM waits until a complete boundary is available, then calculates all pending results in one execution.</p>`;
     }else if(selectedSeconds){
       const launches=Math.ceil(86400/selectedSeconds);
       $('executionSummary').innerHTML=`
