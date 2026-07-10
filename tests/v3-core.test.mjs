@@ -11,7 +11,7 @@ vm.createContext(context);
 vm.runInContext(code,context);
 const C=context.window.BTMCore;
 
-function output(overrides={}){return {id:'o',variableName:'LAeq',displayName:'LAeq 15 min',duration:15,unit:'min',mode:'fixed',step:15,stepUnit:'min',calendarStart:'07:00',calendarEnd:'17:00',active:true,...overrides};}
+function output(overrides={}){return {id:'o',variableName:'LAeq',displayName:'LAeq 15 min',duration:15,unit:'min',mode:'fixed',step:15,stepUnit:'min',calendarStart:'07:00',calendarEnd:'17:00',calendarDays:[0,1,2,3,4,5,6],active:true,...overrides};}
 function points(start,count,stepSec,value=60){return Array.from({length:count},(_,i)=>({t:start+i*stepSec*1000,v:value}));}
 
 assert.equal(C.inferAcquisition(points(Date.UTC(2026,0,1),20,60)),60);
@@ -66,4 +66,19 @@ r=C.calculateOutput(points(Date.UTC(2026,0,1,7,0),600,60),cal,60,{validCoverage:
 assert.equal(r.length,1);
 assert.equal(r[0].expected,600);
 
-console.log('PASS: 10 LAeq V3 execution and calculation scenarios');
+const weekdays=output({id:'weekdays',duration:10,unit:'h',mode:'calendar',calendarStart:'07:00',calendarEnd:'17:00',calendarDays:[1,2,3,4,5]});
+r=C.calculateOutput(points(Date.UTC(2026,0,2,7,0),82,3600),weekdays,3600,{validCoverage:100,timestampConvention:'start'});
+assert.equal(r.length,2);
+assert.equal(new Date(r[0].start).getUTCDay(),5);
+assert.equal(new Date(r[1].start).getUTCDay(),1);
+
+const overnight=output({id:'night',duration:9,unit:'h',mode:'calendar',calendarStart:'22:00',calendarEnd:'07:00',calendarDays:[1]});
+r=C.calculateOutput(points(Date.UTC(2026,0,5,22,0),9,3600),overnight,3600,{validCoverage:100,timestampConvention:'start'});
+assert.equal(r.length,1);
+assert.equal(new Date(r[0].start).getUTCDay(),1);
+assert.equal(new Date(r[0].end).getUTCDay(),2);
+
+r=C.calculateOutput(points(t0,15,60),output({active:false}),60,{validCoverage:0,timestampConvention:'start'});
+assert.equal(r.length,0);
+
+console.log('PASS: 13 LAeq V3 execution, calendar-day and calculation scenarios');
