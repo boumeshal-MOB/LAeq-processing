@@ -54,14 +54,14 @@
         <div><b>Calculation window</b><span>How much history is used for one LAeq, for example 15 minutes.</span></div>
         <div><b>Output interval</b><span>How often a result is produced. It can be shorter than the window only in Rolling mode.</span></div>
       </div>
-      <div class="info compact-info"><b>One processing can generate several LAeq variables.</b> A single calculation run can create several pending output timestamps.</div>
+      <div class="info compact-info"><b>One processing can generate several LAeq variables.</b> Disabled outputs stay configured but are ignored by calculations and can still be removed.</div>
 
       <div class="tw output-table-wrap">
         <table class="compact output-table">
           <colgroup>
             <col class="col-var"><col class="col-name"><col class="col-window"><col class="col-mode"><col class="col-output"><col class="col-calendar"><col class="col-active"><col class="col-summary"><col class="col-action">
           </colgroup>
-          <thead><tr><th>Generated variable</th><th>Display name</th><th>Calculation window</th><th>Mode</th><th>Output interval</th><th>Calendar period</th><th>Active</th><th>Summary</th><th></th></tr></thead>
+          <thead><tr><th>Generated variable</th><th>Display name</th><th>Calculation window</th><th>Mode</th><th>Output interval</th><th>Calendar schedule</th><th>Active</th><th>Summary</th><th></th></tr></thead>
           <tbody id="olist"></tbody>
         </table>
       </div>
@@ -70,7 +70,7 @@
       <div class="mode-help">
         <div><b>Fixed</b><br>Non-overlapping clock blocks. A 15-minute window produces one value every 15 minutes.</div>
         <div><b>Rolling</b><br>Overlapping windows. A 15-minute window can produce one value every minute.</div>
-        <div><b>Calendar</b><br>A named period such as 07:00–17:00 or 22:00–07:00.</div>
+        <div><b>Calendar</b><br>Select start/end time and active weekdays. Overnight periods use the selected start day.</div>
       </div>
     </section>
 
@@ -144,6 +144,12 @@
   </div>
 </div>
 
+<script>
+  // Preserve the current mockup configuration while introducing calendar-day settings.
+  if(!localStorage.getItem('btm-laeq-v3-admin-v4')&&localStorage.getItem('btm-laeq-v3-admin-v3')){
+    localStorage.setItem('btm-laeq-v3-admin-v4',localStorage.getItem('btm-laeq-v3-admin-v3'));
+  }
+</script>
 <script src="v3-core.js"></script>
 <script src="v3-app.js"></script>
 </body>

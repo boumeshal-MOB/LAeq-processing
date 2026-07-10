@@ -3,7 +3,11 @@
 
   const C=window.BTMCore;
   const $=(id)=>document.getElementById(id);
-  const KEY='btm-laeq-v3-admin-v3';
+  const KEY='btm-laeq-v3-admin-v4';
+  const DAY_ORDER=[1,2,3,4,5,6,0];
+  const DAY_NAMES={0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
+  const WEEKDAYS=[1,2,3,4,5];
+  const EVERY_DAY=[0,1,2,3,4,5,6];
 
   let state=loadState();
   let parsed=null;
@@ -12,10 +16,14 @@
   let results=[];
 
   let outputs=state.outputs||[
-    {id:'15m',variableName:'Noise_LAeq_15min',displayName:'LAeq 15 min',duration:15,unit:'min',mode:'fixed',step:15,stepUnit:'min',calendarStart:'00:00',calendarEnd:'00:15',active:true},
-    {id:'1h',variableName:'Noise_LAeq_1h',displayName:'LAeq 1 h',duration:1,unit:'h',mode:'fixed',step:1,stepUnit:'h',calendarStart:'00:00',calendarEnd:'01:00',active:true},
-    {id:'10h',variableName:'Noise_LAeq_10h',displayName:'LAeq 10 h',duration:10,unit:'h',mode:'calendar',step:1,stepUnit:'h',calendarStart:'07:00',calendarEnd:'17:00',active:true}
+    {id:'15m',variableName:'Noise_LAeq_15min',displayName:'LAeq 15 min',duration:15,unit:'min',mode:'fixed',step:15,stepUnit:'min',calendarStart:'00:00',calendarEnd:'00:15',calendarDays:EVERY_DAY.slice(),active:true},
+    {id:'1h',variableName:'Noise_LAeq_1h',displayName:'LAeq 1 h',duration:1,unit:'h',mode:'fixed',step:1,stepUnit:'h',calendarStart:'00:00',calendarEnd:'01:00',calendarDays:EVERY_DAY.slice(),active:true},
+    {id:'10h',variableName:'Noise_LAeq_10h',displayName:'LAeq 10 h',duration:10,unit:'h',mode:'calendar',step:1,stepUnit:'h',calendarStart:'07:00',calendarEnd:'17:00',calendarDays:WEEKDAYS.slice(),active:true}
   ];
+
+  for(const output of outputs){
+    output.calendarDays=C.normalizeCalendarDays(output.calendarDays);
+  }
 
   $('pname').value=state.processingName||$('pname').value;
   $('active').value=state.active||'Yes';
@@ -70,20 +78,47 @@
 
   document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>activateTab(tab.dataset.p)));
 
+  function sameDays(left,right){
+    const a=[...left].sort((x,y)=>x-y);
+    const b=[...right].sort((x,y)=>x-y);
+    return a.length===b.length&&a.every((value,index)=>value===b[index]);
+  }
+
+  function calendarDaysLabel(days){
+    const normalized=C.normalizeCalendarDays(days);
+    if(sameDays(normalized,EVERY_DAY))return 'Every day';
+    if(sameDays(normalized,WEEKDAYS))return 'Mon–Fri';
+    return DAY_ORDER.filter(day=>normalized.includes(day)).map(day=>DAY_NAMES[day]).join(', ');
+  }
+
+  function calendarDayControls(output){
+    const selected=C.normalizeCalendarDays(output.calendarDays);
+    const chips=DAY_ORDER.map(day=>`<label class="day-chip"><input type="checkbox" data-day="${day}" ${selected.includes(day)?'checked':''}><span>${DAY_NAMES[day]}</span></label>`).join('');
+    return `<div class="calendar-editor">
+      <div class="calendar-range"><input type="time" data-k="calendarStart" value="${output.calendarStart}"><span>→</span><input type="time" data-k="calendarEnd" value="${output.calendarEnd}"></div>
+      <div class="calendar-days" aria-label="Active calendar days">${chips}</div>
+      <div class="calendar-presets"><button type="button" class="text-btn" data-calendar-preset="weekdays">Weekdays</button><button type="button" class="text-btn" data-calendar-preset="all">Every day</button></div>
+      <div class="calendar-note">For overnight periods, selected days refer to the start day.</div>
+    </div>`;
+  }
+
   function renderOutputs(){
     $('olist').innerHTML='';
 
     for(const output of outputs){
       C.normalizeOutput(output);
       const expected=acquisitionSec?Math.round(output.periodSeconds/acquisitionSec).toLocaleString():'—';
+      const daysLabel=calendarDaysLabel(output.calendarDays);
       const outputLabel=output.mode==='rolling'
         ?`every ${C.duration(output.stepSeconds)}`
         :output.mode==='fixed'
           ?`every ${C.duration(output.periodSeconds)}`
-          :`${output.calendarStart}–${output.calendarEnd}`;
+          :`${output.calendarStart}–${output.calendarEnd} · ${daysLabel}`;
       const summary=`${C.duration(output.periodSeconds)} ${output.mode} · output ${outputLabel} · ${expected} source value${expected==='1'?'':'s'}`;
 
       const row=document.createElement('tr');
+      row.className=`output-row${output.active?'':' is-disabled'}`;
+      row.dataset.outputId=output.id;
       row.innerHTML=`
         <td><input class="var" data-k="variableName" value="${C.esc(output.variableName)}"></td>
         <td><input class="name" data-k="displayName" value="${C.esc(output.displayName)}"></td>
@@ -91,20 +126,44 @@
         <td><select data-k="mode"><option value="fixed" ${output.mode==='fixed'?'selected':''}>Fixed</option><option value="rolling" ${output.mode==='rolling'?'selected':''}>Rolling</option><option value="calendar" ${output.mode==='calendar'?'selected':''}>Calendar</option></select></td>
         <td>${output.mode==='rolling'
           ?`<div class="output-fields"><input type="number" min="1" data-k="step" value="${output.step}"><select data-k="stepUnit"><option value="s" ${output.stepUnit==='s'?'selected':''}>Seconds</option><option value="min" ${output.stepUnit==='min'?'selected':''}>Minutes</option><option value="h" ${output.stepUnit==='h'?'selected':''}>Hours</option></select></div>`
-          :`<span class="cell-note">${output.mode==='fixed'?C.duration(output.periodSeconds):'One per period'}</span>`}</td>
-        <td>${output.mode==='calendar'
-          ?`<div class="calendar-range"><input type="time" data-k="calendarStart" value="${output.calendarStart}"><span>→</span><input type="time" data-k="calendarEnd" value="${output.calendarEnd}"></div>`
-          :'—'}</td>
-        <td><select data-k="active"><option value="true" ${output.active?'selected':''}>Yes</option><option value="false" ${!output.active?'selected':''}>No</option></select></td>
+          :`<span class="cell-note">${output.mode==='fixed'?C.duration(output.periodSeconds):'One per selected day'}</span>`}</td>
+        <td>${output.mode==='calendar'?calendarDayControls(output):'—'}</td>
+        <td class="active-cell"><select data-k="active" aria-label="Active output"><option value="true" ${output.active?'selected':''}>Yes</option><option value="false" ${!output.active?'selected':''}>No</option></select></td>
         <td><div class="summary">${C.esc(summary)}</div></td>
-        <td><button class="btn small danger" data-remove="${output.id}">Remove</button></td>`;
+        <td class="action-cell"><button class="btn small danger" data-remove="${output.id}">Remove</button></td>`;
 
       row.querySelectorAll('[data-k]').forEach(input=>{
+        if(input.dataset.k!=='active')input.disabled=!output.active;
         input.addEventListener('change',()=>{
           let value=input.value;
           if(['duration','step'].includes(input.dataset.k))value=Number(value)||1;
           if(input.dataset.k==='active')value=value==='true';
           output[input.dataset.k]=value;
+          renderOutputs();
+          updateExecutionUI();
+          persist();
+        });
+      });
+
+      row.querySelectorAll('[data-day]').forEach(input=>{
+        input.disabled=!output.active;
+        input.addEventListener('change',()=>{
+          const chosen=[...row.querySelectorAll('[data-day]:checked')].map(item=>Number(item.dataset.day));
+          if(!chosen.length){
+            input.checked=true;
+            return;
+          }
+          output.calendarDays=chosen;
+          renderOutputs();
+          updateExecutionUI();
+          persist();
+        });
+      });
+
+      row.querySelectorAll('[data-calendar-preset]').forEach(button=>{
+        button.disabled=!output.active;
+        button.addEventListener('click',()=>{
+          output.calendarDays=button.dataset.calendarPreset==='weekdays'?WEEKDAYS.slice():EVERY_DAY.slice();
           renderOutputs();
           updateExecutionUI();
           persist();
@@ -162,7 +221,7 @@
     if(mode==='event'){
       $('executionSummary').innerHTML=`
         <div><span>Source acquisition</span><b>${C.esc(sourceLabel)}</b></div>
-        <div><span>Calculation check</span><b>Every ${C.esc(C.duration(recommendation.batchSeconds))}</b></div>
+        <div><span>Calculation check</span><b>${recommendation.batchSeconds?`Every ${C.esc(C.duration(recommendation.batchSeconds))}`:'No active output'}</b></div>
         <div><span>Possible outputs per run</span><b>Up to ${possibleResults}</b></div>
         <p>New data does not start Python immediately. BTM waits for a complete boundary, then calculates all missing results in one run.</p>`;
     }else if(selectedSeconds){
@@ -259,7 +318,7 @@
   $('vc').addEventListener('change',refreshSource);
 
   $('add').addEventListener('click',()=>{
-    outputs.push({id:`out${Date.now()}`,variableName:'Noise_LAeq_custom',displayName:'LAeq custom',duration:30,unit:'min',mode:'fixed',step:30,stepUnit:'min',calendarStart:'07:00',calendarEnd:'17:00',active:true});
+    outputs.push({id:`out${Date.now()}`,variableName:'Noise_LAeq_custom',displayName:'LAeq custom',duration:30,unit:'min',mode:'fixed',step:30,stepUnit:'min',calendarStart:'07:00',calendarEnd:'17:00',calendarDays:EVERY_DAY.slice(),active:true});
     renderOutputs();
     updateExecutionUI();
     persist();
@@ -368,7 +427,7 @@
       const last=state.lastCalculatedByOutput?.[output.id];
       const expected=acquisitionSec?Math.round(output.periodSeconds/acquisitionSec):'—';
       const calculation=output.mode==='calendar'
-        ?`${output.calendarStart}–${output.calendarEnd}`
+        ?`${output.calendarStart}–${output.calendarEnd} · ${calendarDaysLabel(output.calendarDays)}`
         :`${output.mode} ${C.duration(output.periodSeconds)} · output ${output.mode==='rolling'?C.duration(output.stepSeconds):C.duration(output.outputIntervalSeconds)}`;
       return `<tr><td><b>${C.esc(output.variableName)}</b></td><td>${C.esc(calculation)}</td><td>${expected}</td><td>${last?C.fmt(last):'Never'}</td><td><span class="pill ${output.active?'':'wait'}">${output.active?(last?'Up to date':'Waiting'):'Disabled'}</span></td></tr>`;
     }).join('');

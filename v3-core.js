@@ -1,5 +1,6 @@
 (function(){
   const DAY = 864e5;
+  const ALL_DAYS = [0,1,2,3,4,5,6];
   const pad = (n)=>String(n).padStart(2,'0');
 
   function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
@@ -82,10 +83,16 @@
     diffs.sort((a,b)=>a-b);return diffs.length?diffs[Math.floor(diffs.length/2)]:null;
   }
 
+  function normalizeCalendarDays(days){
+    const clean=Array.isArray(days)?[...new Set(days.map(Number).filter(day=>Number.isInteger(day)&&day>=0&&day<=6))]:[];
+    return clean.length?clean:ALL_DAYS.slice();
+  }
+
   function normalizeOutput(o){
     o.periodSeconds=seconds(o.duration,o.unit);
     o.stepSeconds=o.mode==='rolling'?seconds(o.step||o.duration,o.stepUnit||o.unit):o.periodSeconds;
     o.outputIntervalSeconds=o.mode==='rolling'?o.stepSeconds:o.mode==='calendar'?86400:o.periodSeconds;
+    o.calendarDays=normalizeCalendarDays(o.calendarDays);
     return o;
   }
 
@@ -111,8 +118,12 @@
     };
     if(output.mode==='calendar'){
       const toMin=(x)=>{const a=String(x||'00:00').split(':');return (+a[0]||0)*60+(+a[1]||0);};
-      const sm=toMin(output.calendarStart),em=toMin(output.calendarEnd);
-      for(let d=Math.floor(first/DAY)*DAY-DAY;d<=Math.floor(available/DAY)*DAY;d+=DAY){const s=d+sm*60000,e=d+em*60000+(em<=sm?DAY:0);if(e<=available)make(s,e);}
+      const sm=toMin(output.calendarStart),em=toMin(output.calendarEnd),allowedDays=new Set(output.calendarDays);
+      for(let d=Math.floor(first/DAY)*DAY-DAY;d<=Math.floor(available/DAY)*DAY;d+=DAY){
+        if(!allowedDays.has(new Date(d).getUTCDay()))continue;
+        const s=d+sm*60000,e=d+em*60000+(em<=sm?DAY:0);
+        if(e<=available)make(s,e);
+      }
     }else if(output.mode==='rolling'){
       const p=output.periodSeconds*1000,step=output.stepSeconds*1000,firstEnd=first+p,lastEnd=available;
       for(let e=firstEnd;e<=lastEnd;e+=step)make(e-p,e);
@@ -148,5 +159,5 @@
   function recommendedFrequency(outputs,acqSec){const r=recommendedExecution(outputs,acqSec);return {seconds:r.batchSeconds,reason:r.reason,warnings:r.warnings};}
   function outputsPerRun(output,runSeconds){normalizeOutput(output);if(!runSeconds||!output.active)return 0;if(output.mode==='rolling')return Math.max(1,Math.ceil(runSeconds/output.stepSeconds));if(output.mode==='fixed')return Math.max(1,Math.ceil(runSeconds/output.periodSeconds));return 1;}
 
-  window.BTMCore={DAY,esc,fmt,parseNumber,parseTimestamp,seconds,duration,durationWithHours,csvRows,parseSource,makePoints,inferAcquisition,normalizeOutput,calculateAll,calculateOutput,recommendedExecution,recommendedFrequency,outputsPerRun,availableThrough,trim};
+  window.BTMCore={DAY,ALL_DAYS,esc,fmt,parseNumber,parseTimestamp,seconds,duration,durationWithHours,csvRows,parseSource,makePoints,inferAcquisition,normalizeCalendarDays,normalizeOutput,calculateAll,calculateOutput,recommendedExecution,recommendedFrequency,outputsPerRun,availableThrough,trim};
 })();
