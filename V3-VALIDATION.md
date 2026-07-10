@@ -1,107 +1,129 @@
-# LAeq V3 validation
+# LAeq processing validation
 
-The V3 mockup was validated locally after the execution-model and user-interface redesign.
+## Scope
 
-## Reference Micromate file
+This version validates LAeq calculation windows and recurring local-time schedules only. Country templates do not configure limits, penalties, alerts or full regulatory assessments.
 
-Source acquisition inferred from recent timestamps: **60 seconds**.
+## Main corrections
 
-Fixed 15-minute output with 80% valid-data coverage:
+- Calendar duration is derived from its start/end times and can no longer contradict the displayed schedule.
+- Fixed and Rolling outputs can be restricted to selected local hours and weekdays.
+- Site timezone is explicit and IANA-based (`Europe/London`, `Europe/Paris`, `Europe/Madrid`, `Europe/Dublin`, `Europe/Rome`).
+- Naive timestamps from Micromate and CUBE files are interpreted in the selected site timezone.
+- Overnight schedules use the selected start weekday.
+- Inactive outputs are visibly greyed, locked, excluded from calculation, and remain removable/reactivatable.
+- Custom execution remains empty until the user enters a value.
+- User-facing execution text describes BTM behaviour without exposing implementation technology.
 
-| Period end | Samples | Expected | LAeq |
-|---|---:|---:|---:|
-| 2026-07-01 10:15:00 | 14 | 15 | 67.44 dB(A) |
-| 2026-07-01 10:30:00 | 15 | 15 | 67.86 dB(A) |
-| 2026-07-01 10:45:00 | 15 | 15 | 67.88 dB(A) |
-| 2026-07-01 11:00:00 | 16 | 15 | 73.62 dB(A) |
+## Calculation templates
 
-These four values match the supplied official 15-minute result file.
+### Basic LAeq
 
-## Execution-model validation
+- Fixed LAeq 15 min, continuous.
+- Fixed LAeq 1 h, continuous.
+- Calendar LAeq 07:00–17:00, Monday–Friday, derived duration 10 h.
 
-The user interface separates four concepts:
+### France — ICPE recurring periods
 
-1. **Source acquisition interval** — how often an input value is stored.
-2. **Calculation window** — how much history is used for one LAeq.
-3. **Output interval** — how often a result timestamp is produced.
-4. **Processing execution interval** — how often the service checks and calculates.
+- Day: 07:00–22:00, Monday–Saturday, one LAeq over the 15 h period.
+- Night: 22:00–07:00, every day, one LAeq over the 9 h period.
+- Additional Sunday daytime block: 07:00–22:00, Sunday, treated separately without overlapping the daily night block.
+- Public holidays remain site-calendar dates and require review.
 
-The recommended processing execution interval is based on the smallest active **calculation window**, not on the fastest rolling output interval.
+Reference: https://aida.ineris.fr/reglementation/arrete-230197-relatif-a-limitation-bruits-emis-lenvironnement-installations-classees
 
-Example with source data every 1 minute:
+### United Kingdom — BS 4142 typical calculation periods
 
-- Fixed LAeq 15 min: recommended calculation batch = 15 min, one result per batch.
-- Rolling LAeq 15 min with output every 1 min: recommended calculation batch = 15 min. One batch can create up to 15 missing rolling results.
-- Custom execution every 1 min remains possible for lower latency, but it creates approximately 15 times more calculation launches than the recommended 15-minute batch.
+- Daytime: fixed LAeq 1 h within 07:00–23:00.
+- Night-time: fixed LAeq 15 min within 23:00–07:00.
+- The template covers calculation periods only and is not a complete BS 4142 assessment.
 
-Smart event-driven mode is batched: a data-arrival event marks the processing as ready, but it does not directly invoke the Python calculation. The calculation starts only when a complete recommended batch boundary is available.
+Reference: https://knowledge.bsigroup.com/products/methods-for-rating-and-assessing-industrial-and-commercial-sound
 
-If there is no new complete period, the execution is recorded as:
+### Ireland — EPA NG4
 
-`Skipped — No new complete period available or no new source data available.`
+- Fixed LAeq 15 min, aligned continuously.
+- Day: 07:00–19:00, one LAeq over 12 h.
+- Evening: 19:00–23:00, one LAeq over 4 h.
+- Night: 23:00–07:00, one LAeq over 8 h.
 
-No generated variable is modified in that case.
+Reference: https://www.epa.ie/publications/monitoring--assessment/noise/NG4-Guidance-Note-%28January-2016-Update%29.pdf
 
-## Advanced delayed-data policy
+### Spain — RD 1367/2007
 
-Recalculation of already completed periods is disabled by default.
+- Day: 07:00–19:00 local time, one LAeq over 12 h.
+- Evening: 19:00–23:00 local time, one LAeq over 4 h.
+- Night: 23:00–07:00 local time, one LAeq over 8 h.
+- The competent authority may adjust the start times, therefore all fields remain editable.
 
-- Default: **No recalculation**.
-- Default delayed-data tolerance: **0 minutes**.
-- The tolerance control is hidden unless recalculation is explicitly enabled.
+Reference: https://www.boe.es/buscar/act.php?id=BOE-A-2007-18397
 
-This means the default configuration has no delayed-data side effect.
+### Italy — national reference periods
 
-## Automated tests
+- Fixed LAeq 1 h, continuous.
+- Daytime: 06:00–22:00, one LAeq over 16 h.
+- Night-time: 22:00–06:00, one LAeq over 8 h.
 
-Run:
+Reference framework: DPCM 14 November 1997 and DM 16 March 1998.
 
-```bash
-node tests/v3-core.test.mjs
-node tests/v3-ui.test.mjs
-node --check v3-core.js
-node --check v3-app.js
-```
+## Automated validation
 
-The core automated checks cover:
+### Core test suite
 
-1. Acquisition inference for 1-minute and 1-second sources.
-2. A 15-minute rolling window with 1-minute outputs still recommends a 15-minute calculation batch.
-3. A fixed 15-minute LAeq waits for all 15 source minutes.
-4. A rolling 15-minute LAeq creates the first complete output only when enough data is available.
-5. The next 15-minute batch catches up 15 missing rolling outputs.
-6. Re-running with the same stored boundary creates no duplicates.
-7. Multiple outputs select the smallest calculation window as the recommended batch.
-8. Rolling output faster than source acquisition produces a warning.
-9. Constant energetic input remains unchanged after LAeq aggregation.
-10. A 10-hour calendar output is generated only when the full period is available.
+`node tests/v3-core.test.mjs`
 
-The UI regression checks cover:
+21 scenarios cover:
 
-- Smart event-driven is selected by default.
-- Custom schedule is hidden until selected.
-- No custom run interval is prefilled or automatically suggested.
-- The custom interval is mandatory before saving a custom schedule.
-- The delayed-data option is advanced, disabled by default and starts at 0 minutes.
-- The output table uses fixed column widths and a dedicated calendar-range layout.
-- Skip messaging and stored output-boundary logic remain present.
+- source acquisition inference;
+- naive source timestamps interpreted in the site timezone;
+- fixed and rolling LAeq calculations;
+- calendar duration derived from start/end time;
+- overnight periods;
+- weekday/weekend exclusion;
+- all five country templates;
+- inactive-output exclusion;
+- catch-up without duplicate periods;
+- recommendation based on the smallest calculation window;
+- daylight-saving transition handling.
 
-## Browser interaction and visual checks
+### Static UI regression suite
 
-The mockup was rendered at **1518 × 900** and checked with a headless browser.
+`node tests/v3-ui.test.mjs`
 
-Validated interactions:
+31 checks cover:
 
-- Three default output rows render correctly.
-- Calendar start/end fields do not overlap the Summary column.
-- Switching to Custom schedule reveals an empty interval field.
-- Saving an empty Custom schedule is blocked with a validation message.
-- A valid custom interval saves and opens Administration.
-- Advanced delayed-data controls remain hidden until explicitly enabled.
-- Manual run without source data is blocked with a clear message.
+- template controls and country definitions;
+- site timezone selector;
+- derived Calendar calculation window;
+- schedule presets and weekdays;
+- inactive-output styling and locking;
+- removable inactive outputs;
+- empty Custom execution value;
+- absence of implementation-language references.
 
-## Intended production split
+### Chromium interaction suite
 
-- **Next.js / React:** forms, source selection, output configuration and administration screens.
-- **Node.js service:** event batching, boundary checks, scheduler recommendation, missing-period detection and orchestration.
-- **Python Lambda:** source query, energetic LAeq calculation, coverage validation and result upsert.
+`python tests/v3-browser.test.py`
+
+30 browser checks cover:
+
+- live Calendar duration updates;
+- no editable Calendar duration field;
+- grey inactive cards and locked fields;
+- reactivation and deletion controls;
+- France, UK, Ireland, Spain and Italy template rendering;
+- correct timezone selection;
+- correct country period summaries;
+- Custom execution validation;
+- absence of runtime JavaScript errors.
+
+## Reference Micromate verification
+
+The supplied Micromate Full Histogram file was parsed as 60 values at a 60-second acquisition interval. With the site timezone set to `Europe/Paris`, fixed LAeq 15 min results are:
+
+- 10:15 → 67.44 dB(A)
+- 10:30 → 67.86 dB(A)
+- 10:45 → 67.88 dB(A)
+- 11:00 → 73.62 dB(A)
+
+This confirms that the local measurement timestamps are not incorrectly shifted by the timezone display.
