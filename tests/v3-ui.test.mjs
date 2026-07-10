@@ -6,40 +6,43 @@ import assert from 'node:assert/strict';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const html=fs.readFileSync(path.join(here,'..','index-v3.html'),'utf8');
 const app=fs.readFileSync(path.join(here,'..','v3-app.js'),'utf8');
+const core=fs.readFileSync(path.join(here,'..','v3-core.js'),'utf8');
 const css=fs.readFileSync(path.join(here,'..','v3.css'),'utf8');
 
 const checks=[
-  [html,'3. Execution'],
+  [html,'Calculation templates'],
+  [html,'Apply template'],
+  [html,'Site timezone'],
   [html,'Smart event-driven'],
   [html,'Custom schedule'],
   [html,'placeholder="Enter a value"'],
-  [html,'No — recommended'],
-  [html,'value="0"'],
   [html,'No new complete period available'],
-  [html,'Calendar schedule'],
-  [html,'active weekdays'],
-  [app,'class="calendar-range"'],
-  [app,'class="calendar-days"'],
-  [app,'data-day='],
-  [app,'data-calendar-preset="weekdays"'],
-  [app,'data-calendar-preset="all"'],
-  [app,'is-disabled'],
-  [app,"input.dataset.k!=='active'"],
-  [app,'button.disabled=!output.active'],
+  [html,'Add custom LAeq output'],
+  [app,'Calendar period'],
+  [app,'Derived automatically from start and end time.'],
+  [app,'data-days-preset="weekdays"'],
+  [app,'data-days-preset="mon-sat"'],
+  [app,'data-days-preset="all"'],
+  [app,"output-card${output.active?'':' inactive'}"],
+  [app,"control.disabled=!output.active"],
   [app,'data-remove'],
-  [css,'.output-row.is-disabled'],
-  [css,'.calendar-days{display:flex'],
+  [app,'C.templateOutputs'],
+  [html,'Europe/London'],
+  [core,"name:'France — ICPE periods'"],
+  [core,"name:'UK — BS 4142 typical periods'"],
+  [core,"name:'Ireland — EPA NG4 periods'"],
+  [core,"name:'Spain — RD 1367/2007 periods'"],
+  [core,"name:'Italy — DPCM reference periods'"],
+  [css,'.output-card.inactive'],
   [css,'.day-chip input:disabled+span'],
-  [css,'.output-table{min-width:1550px'],
-  [app,'Skipped — No new complete period available or no new source data available'],
-  [app,'state.lastCalculatedByOutput'],
-  [app,"executionMode()==='custom'"],
-  [app,'New data marks the processing as ready'],
-  [app,'Results per execution']
+  [css,'.schedule-editor'],
+  [app,'BTM waits until at least one configured period is complete'],
+  [app,'Skipped — No new complete period available.']
 ];
 
-for(const [source,needle] of checks)assert.ok(source.includes(needle),`Missing expected UI marker: ${needle}`);
-assert.ok(!html.includes('id="fcustom" type="number" min="1" value="15"'),'Custom run interval must not be prefilled.');
-assert.ok(!/python/i.test(app),'User-facing execution copy must remain implementation-agnostic.');
+for(const [source,needle] of checks)assert.ok(source.includes(needle),`Missing expected marker: ${needle}`);
+assert.ok(!app.includes('Python'),'User-facing application must not expose implementation-language references.');
+assert.ok(!html.includes('value="15" placeholder="Enter a value"'),'Custom execution must not be prefilled.');
+assert.ok(app.includes("output.mode==='calendar'"),'Calendar mode must have a dedicated derived-window branch.');
 
-console.log(`PASS: ${checks.length+2} LAeq V3 UI and behaviour checks`);
+console.log(`PASS: ${checks.length+3} LAeq UI structure and regression checks`);

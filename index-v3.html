@@ -3,153 +3,145 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>BTM LAeq V3</title>
+  <title>BTM LAeq processing</title>
   <link rel="stylesheet" href="v3.css">
 </head>
 <body>
-<header>
+<header class="app-header">
   <div>
-    <h1>Processing selector — LAeq V3</h1>
-    <p>Multi-output LAeq · smart execution · catch-up · administration</p>
+    <h1>LAeq processing</h1>
+    <p>Multiple calculation windows, scheduled periods and country templates</p>
   </div>
 </header>
 
-<div class="wrap">
-  <div class="card processing-header">
-    <div class="top">
-      <div class="f"><label>Processing type</label><select disabled><option>LAeq</option></select></div>
-      <div class="f"><label>Processing name</label><input id="pname" value="Environmental noise LAeq"></div>
-      <div class="f"><label>Active</label><select id="active"><option>Yes</option><option>No</option></select></div>
-      <div class="f"><label>Generated outputs</label><input id="topOutputs" disabled value="3 variables"></div>
+<main class="page-shell">
+  <section class="card processing-card">
+    <div class="form-grid four">
+      <label class="field"><span>Processing type</span><select disabled><option>LAeq</option></select></label>
+      <label class="field"><span>Processing name</span><input id="processingName" value="Environmental noise LAeq"></label>
+      <label class="field"><span>Processing status</span><select id="processingActive"><option value="yes">Active</option><option value="no">Inactive</option></select></label>
+      <label class="field"><span>Site timezone</span><select id="timeZone">
+        <option value="Europe/London">Europe/London</option>
+        <option value="Europe/Paris">Europe/Paris</option>
+        <option value="Europe/Madrid">Europe/Madrid</option>
+        <option value="Europe/Dublin">Europe/Dublin</option>
+        <option value="Europe/Rome">Europe/Rome</option>
+        <option value="UTC">UTC</option>
+      </select></label>
     </div>
-  </div>
+  </section>
 
-  <div class="card app-card">
+  <section class="card app-card">
     <nav class="tabs" aria-label="Processing configuration">
-      <button class="tab on" data-p="source">1. Source</button>
-      <button class="tab" data-p="outputs">2. LAeq outputs</button>
-      <button class="tab" data-p="quality">3. Execution</button>
-      <button class="tab" data-p="admin">4. Administration</button>
-      <button class="tab manual" data-p="run">5. Manual run</button>
+      <button class="tab active" data-panel="source">1. Source</button>
+      <button class="tab" data-panel="outputs">2. LAeq outputs</button>
+      <button class="tab" data-panel="execution">3. Execution</button>
+      <button class="tab" data-panel="admin">4. Administration</button>
+      <button class="tab manual" data-panel="manual">5. Manual run</button>
     </nav>
 
-    <section id="source" class="panel on">
-      <div class="grid source-grid">
-        <div class="upload" onclick="file.click()">
-          <input id="file" hidden type="file" accept=".csv,.txt">
-          <b>Select or drop a CSV/TXT file</b>
-          <div id="fname" class="help">Production BTM will use timestamp + selected variable from the database.</div>
-        </div>
-        <div class="f"><label>Timestamp column</label><select id="tc"></select><div class="help">Used to infer the source acquisition interval.</div></div>
-        <div class="f"><label>Acoustic variable</label><select id="vc"></select><div class="help">Select CUBE LAeq or Micromate Mic Leq, not LMax/LZpeak.</div></div>
-        <div class="f"><label>Detected format</label><input id="format" disabled></div>
+    <section id="source" class="panel active">
+      <div class="form-grid four source-grid">
+        <label class="upload-zone" for="sourceFile">
+          <input id="sourceFile" type="file" accept=".csv,.txt" hidden>
+          <strong>Select or drop a CSV/TXT file</strong>
+          <span id="fileName">Production BTM will query the selected database variable.</span>
+        </label>
+        <label class="field"><span>Timestamp column</span><select id="timestampColumn"></select><small>Used to infer the acquisition interval.</small></label>
+        <label class="field"><span>Acoustic variable</span><select id="valueColumn"></select><small>Select LAeq or Mic Leq, not LMax/LZpeak.</small></label>
+        <label class="field"><span>Detected format</span><input id="detectedFormat" disabled></label>
       </div>
-      <div id="selected" class="info">Load data to verify the selected variable and estimated acquisition interval.</div>
-      <div class="tw preview-wrap"><table><thead><tr><th>Timestamp</th><th>Selected value</th></tr></thead><tbody id="preview"></tbody></table></div>
+      <div id="sourceStatus" class="notice info">Load data to verify the source variable and acquisition interval.</div>
+      <div class="table-wrap preview-wrap">
+        <table><thead><tr><th>Timestamp</th><th>Selected value</th></tr></thead><tbody id="sourcePreview"></tbody></table>
+      </div>
     </section>
 
     <section id="outputs" class="panel">
-      <div class="concepts">
-        <div><b>Source acquisition</b><span id="conceptAcq">How often one input value is stored.</span></div>
-        <div><b>Calculation window</b><span>How much history is used for one LAeq, for example 15 minutes.</span></div>
-        <div><b>Output interval</b><span>How often a result is produced. It can be shorter than the window only in Rolling mode.</span></div>
+      <div class="concept-grid">
+        <article><strong>Calculation window</strong><span>The data duration used for one LAeq: 15 min, 1 h or a complete scheduled period.</span></article>
+        <article><strong>Output interval</strong><span>How often a value is generated. Rolling outputs may be more frequent than their window.</span></article>
+        <article><strong>Applicable schedule</strong><span>Optional local hours and weekdays restricting when Fixed or Rolling values are created.</span></article>
       </div>
-      <div class="info compact-info"><b>One processing can generate several LAeq variables.</b> Disabled outputs stay configured but are ignored by calculations and can still be removed.</div>
 
-      <div class="tw output-table-wrap">
-        <table class="compact output-table">
-          <colgroup>
-            <col class="col-var"><col class="col-name"><col class="col-window"><col class="col-mode"><col class="col-output"><col class="col-calendar"><col class="col-active"><col class="col-summary"><col class="col-action">
-          </colgroup>
-          <thead><tr><th>Generated variable</th><th>Display name</th><th>Calculation window</th><th>Mode</th><th>Output interval</th><th>Calendar schedule</th><th>Active</th><th>Summary</th><th></th></tr></thead>
-          <tbody id="olist"></tbody>
-        </table>
+      <div class="template-panel">
+        <div class="template-heading">
+          <div><h2>Calculation templates</h2><p>Templates create editable LAeq outputs only. They do not configure thresholds or alerts.</p></div>
+          <div class="template-actions">
+            <select id="templateSelect" aria-label="LAeq calculation template"></select>
+            <button id="applyTemplate" class="button primary">Apply template</button>
+          </div>
+        </div>
+        <div id="templateDescription" class="template-description"></div>
       </div>
-      <p><button id="add" class="btn">+ Add LAeq output</button></p>
 
-      <div class="mode-help">
-        <div><b>Fixed</b><br>Non-overlapping clock blocks. A 15-minute window produces one value every 15 minutes.</div>
-        <div><b>Rolling</b><br>Overlapping windows. A 15-minute window can produce one value every minute.</div>
-        <div><b>Calendar</b><br>Select start/end time and active weekdays. Overnight periods use the selected start day.</div>
+      <div class="outputs-toolbar">
+        <div><strong id="outputCount">0 outputs</strong><span>Inactive outputs remain visible but are excluded from calculations.</span></div>
+        <button id="addOutput" class="button">+ Add custom LAeq output</button>
       </div>
+      <div id="outputList" class="output-list"></div>
     </section>
 
-    <section id="quality" class="panel execution-panel">
-      <div class="section-heading">
-        <div><h2>How should this processing run?</h2><p>Execution controls when BTM checks and calculates. It does not change the LAeq window or output interval.</p></div>
-        <div class="recommendation-chip"><span>Recommended batch</span><b id="recommendedBatch">—</b></div>
+    <section id="execution" class="panel execution-panel">
+      <div class="section-title-row">
+        <div><h2>How should this processing run?</h2><p>Execution controls when BTM checks for complete periods. It does not change the configured LAeq windows.</p></div>
+        <div class="metric-chip"><span>Recommended check</span><strong id="recommendedCheck">—</strong></div>
       </div>
 
-      <div class="execution-choices" role="radiogroup" aria-label="Processing execution mode">
-        <label id="eventChoice" class="choice-card selected">
-          <input id="execEvent" type="radio" name="executionMode" value="event" checked>
-          <span class="choice-title">Smart event-driven</span>
-          <span class="badge">Recommended</span>
-          <span class="choice-copy">New data marks the processing as ready. BTM waits for a complete calculation boundary, then runs once and creates all pending results.</span>
+      <div class="choice-grid" role="radiogroup" aria-label="Processing execution mode">
+        <label id="smartChoice" class="choice-card selected">
+          <input id="smartExecution" type="radio" name="executionMode" value="smart" checked>
+          <strong>Smart event-driven</strong><span class="badge">Recommended</span>
+          <p>New data marks the processing as ready. BTM waits for a complete boundary and then calculates every pending result.</p>
         </label>
         <label id="customChoice" class="choice-card">
-          <input id="execCustom" type="radio" name="executionMode" value="custom">
-          <span class="choice-title">Custom schedule</span>
-          <span class="choice-copy">Run at a fixed interval chosen by the user. Use this only when a specific latency is required.</span>
+          <input id="customExecution" type="radio" name="executionMode" value="custom">
+          <strong>Custom schedule</strong>
+          <p>Run at a fixed interval chosen by the user. Empty by default and intended only for a specific latency requirement.</p>
         </label>
       </div>
 
-      <div id="customPanel" class="custom-panel" hidden>
-        <div class="f"><label>Run every</label><div class="inline-fields"><input id="fcustom" type="number" min="1" placeholder="Enter a value"><select id="fcustomUnit"><option value="min">Minutes</option><option value="h">Hours</option></select></div></div>
-        <div class="help">No interval is prefilled. The recommendation above remains guidance only.</div>
+      <div id="customExecutionPanel" class="custom-execution" hidden>
+        <label class="field"><span>Run every</span><div class="inline-control"><input id="customFrequency" type="number" min="1" placeholder="Enter a value"><select id="customFrequencyUnit"><option value="min">Minutes</option><option value="h">Hours</option></select></div></label>
       </div>
 
       <div id="executionSummary" class="execution-summary"></div>
-      <div id="warning"></div>
+      <div id="executionWarning"></div>
 
       <div class="settings-grid">
-        <div class="setting-card">
-          <div class="f"><label>Minimum valid-data coverage (%)</label><input id="coverage" type="number" value="80" min="0" max="100"></div>
-          <div class="help">A result is created only when enough source values are available.</div>
-        </div>
-        <div class="setting-card">
-          <div class="f"><label>Catch-up missing periods</label><select id="catchup"><option value="yes">Enabled</option><option value="no">Disabled</option></select></div>
-          <div class="help">Enabled is recommended. One run creates every complete period after the last stored output timestamp.</div>
-        </div>
+        <article class="setting-card"><label class="field"><span>Minimum valid-data coverage (%)</span><input id="coverage" type="number" value="80" min="0" max="100"></label><small>A result is created only when enough source values are available.</small></article>
+        <article class="setting-card"><label class="field"><span>Catch-up missing periods</span><select id="catchup"><option value="yes">Enabled</option><option value="no">Disabled</option></select></label><small>One execution creates every complete period after the last stored result.</small></article>
       </div>
 
-      <div class="skip-note"><b>If nothing is ready:</b> the execution is skipped and logged as <code>No new complete period available</code>. No output variable is changed.</div>
-
-      <details class="advanced-settings">
-        <summary>Advanced settings</summary>
-        <div class="advanced-body">
-          <div class="f"><label>Recalculate completed periods when delayed data appears</label><select id="recalcLate"><option value="no">No — recommended</option><option value="yes">Yes</option></select></div>
-          <div id="latePanel" class="f" hidden><label>Delayed-data tolerance</label><div class="inline-fields"><input id="late" type="number" min="0" value="0"><select disabled><option>Minutes</option></select></div><div class="help">Only used when recalculation is enabled. The default value of 0 has no impact.</div></div>
-          <div id="readiness" class="technical-readiness">Load source data to inspect the latest available measurement timestamp.</div>
-        </div>
-      </details>
+      <div class="notice neutral"><strong>If nothing is ready:</strong> the execution is skipped and logged as <code>No new complete period available</code>. Existing outputs are unchanged.</div>
     </section>
 
     <section id="admin" class="panel">
-      <div class="info compact-info">Administration starts with a list of processings. Full configuration appears only after the user clicks <b>Edit</b>.</div>
-      <div class="tw"><table class="admin-list"><thead><tr><th>Processing</th><th>Source</th><th>Outputs</th><th>Execution</th><th>Last execution</th><th>Status</th><th>Actions</th></tr></thead><tbody id="plist"></tbody></table></div>
-      <div id="pdetails" class="details" hidden></div>
+      <div class="notice info compact">Select Edit to inspect the saved processing configuration and calculation state.</div>
+      <div class="table-wrap"><table><thead><tr><th>Processing</th><th>Source</th><th>Outputs</th><th>Timezone</th><th>Execution</th><th>Status</th><th></th></tr></thead><tbody id="processingList"></tbody></table></div>
+      <div id="processingDetails" class="details" hidden></div>
     </section>
 
-    <section id="run" class="panel manual-panel">
-      <div class="manual-note"><b>Manual run / test area.</b> Scheduled production execution is automatic. This area is only for testing, backfill and support operations.</div>
-      <div class="stats"><div class="stat"><span>Source rows</span><b id="srows">0</b></div><div class="stat"><span>Valid rows</span><b id="vrows">0</b></div><div class="stat"><span>Acquisition</span><b id="acq">—</b></div><div class="stat"><span>Active outputs</span><b id="ocount">0</b></div><div class="stat"><span>Results</span><b id="rcount">0</b></div><div class="stat"><span>Status</span><b id="status">Waiting</b></div></div>
-      <label class="checkbox-line"><input id="usecatch" type="checkbox" checked> Calculate only missing complete periods after stored boundaries</label>
-      <p><button id="runbtn" class="btn yellow">Run manually now</button> <button id="download" class="btn" disabled>Download CSV</button></p>
-      <div id="runmsg" class="info">Load a file and configure outputs.</div>
-      <div class="tw results-wrap"><table><thead><tr><th>Variable</th><th>Mode</th><th>Timestamp</th><th>Start</th><th>End</th><th>LAeq</th><th>Samples</th><th>Expected</th><th>Coverage</th><th>Type</th></tr></thead><tbody id="result"></tbody></table></div>
+    <section id="manual" class="panel manual-panel">
+      <div class="notice warning compact"><strong>Manual run / test area.</strong> Scheduled production execution remains automatic.</div>
+      <div class="stats-grid">
+        <article><span>Source rows</span><strong id="sourceRows">0</strong></article>
+        <article><span>Valid rows</span><strong id="validRows">0</strong></article>
+        <article><span>Acquisition</span><strong id="acquisition">—</strong></article>
+        <article><span>Active outputs</span><strong id="activeOutputCount">0</strong></article>
+        <article><span>Results</span><strong id="resultCount">0</strong></article>
+        <article><span>Status</span><strong id="runStatus">Waiting</strong></article>
+      </div>
+      <label class="checkbox-row"><input id="manualCatchup" type="checkbox" checked> Calculate only missing complete periods after stored boundaries</label>
+      <div class="manual-actions"><button id="runNow" class="button warning-button">Run manually now</button><button id="downloadResults" class="button" disabled>Download CSV</button></div>
+      <div id="runMessage" class="notice info">Load a source file and configure outputs.</div>
+      <div class="table-wrap results-wrap"><table><thead><tr><th>Variable</th><th>Mode</th><th>Timestamp</th><th>Start</th><th>End</th><th>LAeq</th><th>Samples</th><th>Expected</th><th>Coverage</th><th>Type</th></tr></thead><tbody id="resultTable"></tbody></table></div>
     </section>
 
-    <div class="actions"><button id="reset" class="btn">Reset</button> <button id="save" class="btn primary">Save processing</button></div>
-  </div>
-</div>
+    <footer class="form-actions"><button id="resetApp" class="button">Reset</button><button id="saveProcessing" class="button primary">Save processing</button></footer>
+  </section>
+</main>
 
-<script>
-  // Preserve the current mockup configuration while introducing calendar-day settings.
-  if(!localStorage.getItem('btm-laeq-v3-admin-v4')&&localStorage.getItem('btm-laeq-v3-admin-v3')){
-    localStorage.setItem('btm-laeq-v3-admin-v4',localStorage.getItem('btm-laeq-v3-admin-v3'));
-  }
-</script>
 <script src="v3-core.js"></script>
 <script src="v3-app.js"></script>
 </body>
