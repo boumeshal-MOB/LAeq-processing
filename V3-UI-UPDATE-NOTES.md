@@ -19,3 +19,8 @@ This follow-up refines the V3 LAeq mockup after review.
 - The acquisition interval is inferred from timestamp gaps after selecting the source variable.
 - Catch-up calculates complete missing periods after the last stored boundary and avoids duplicates through upsert logic.
 - Production split remains React/Next.js for UI, Node for event handling/orchestration, and Python Lambda for energetic LAeq calculations.
+
+## Local checks
+
+- JavaScript syntax validated with `node --check`.
+- Static DOM wiring checked for all non-dynamic element IDs.
