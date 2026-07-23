@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BTM — LAeq et indices fractiles</title>
+  <style>
+    :root{
+      --blue:#155eef;
+      --blue-dark:#1849a9;
+      --blue-soft:#eff8ff;
+      --ink:#101828;
+      --muted:#667085;
+      --line:#e4e7ec;
+      --surface:#fff;
+      --page:#f2f4f7;
+      --success:#067647;
+      --success-bg:#ecfdf3;
+      --warning:#b54708;
+      --warning-bg:#fffaeb;
+      --purple:#6941c6;
+      --purple-bg:#f4f3ff;
+      --shadow:0 1px 3px rgba(16,24,40,.08),0 1px 2px rgba(16,24,40,.04);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+    .topbar{height:64px;padding:0 28px;background:#0b1220;color:#fff;display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#53b1fd,#155eef);display:grid;place-items:center;font-weight:800}
+    .brand h1{font-size:16px;margin:0}
+    .brand p{font-size:12px;color:#98a2b3;margin:1px 0 0}
+    .top-actions{display:flex;align-items:center;gap:10px}
+    .top-actions span{font-size:12px;color:#d0d5dd}
+    .page-language{display:flex;align-items:center;gap:8px;border:1px solid #d0d5dd;background:#fff;border-radius:8px;padding:4px 5px 4px 10px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+    .page-language>span{font-size:12px;font-weight:800;color:#475467}
+    .language-select{height:31px;width:auto;min-width:132px;border:0;background:#f2f4f7;color:#101828;font-weight:700}
+    .layout{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:calc(100vh - 64px)}
+    .sidebar{background:#fff;border-right:1px solid var(--line);padding:22px 14px}
+    .side-title{padding:0 12px 10px;color:#98a2b3;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .step{display:flex;gap:10px;align-items:center;width:100%;padding:11px 12px;border:0;border-radius:9px;background:transparent;color:#475467;text-align:left;margin:2px 0}
+    .step.active{background:#eff4ff;color:#3538cd;font-weight:700}
+    .step-number{width:24px;height:24px;border-radius:50%;background:#f2f4f7;display:grid;place-items:center;font-size:12px;font-weight:800}
+    .step.active .step-number{background:#155eef;color:#fff}
+    .dev-note{margin-top:24px;padding:12px;border-radius:10px;background:#f9fafb;border:1px solid var(--line);color:#475467;font-size:12px}
+    .content{padding:28px;max-width:1500px;width:100%;margin:auto}
+    .page-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px}
+    .page-head h2{font-size:25px;letter-spacing:-.02em;margin:0 0 5px}
+    .page-head p{margin:0;color:var(--muted)}
+    .actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+    .button{border:1px solid #d0d5dd;background:#fff;color:#344054;border-radius:8px;padding:9px 14px;font-weight:700;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+    .button:hover{background:#f9fafb}
+    .button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+    .button.primary:hover{background:var(--blue-dark)}
+    .button.soft{background:#eff4ff;border-color:#c7d7fe;color:#3538cd}
+    .button.danger{color:#b42318}
+    .button.small{padding:6px 9px;font-size:12px}
+    .badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:800;background:#eff4ff;color:#3538cd;vertical-align:middle}
+    .badge.new{margin-left:7px;background:#ecfdf3;color:#067647}
+    .panel{display:none}
+    .panel.active{display:block}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px}
+    .card-head{padding:17px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+    .card-head h3{font-size:16px;margin:0 0 3px}
+    .card-head p{margin:0;color:var(--muted);font-size:13px}
+    .card-body{padding:20px}
+    .grid{display:grid;gap:16px}
+    .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+    label.field{display:block}
+    .field>span{display:block;color:#344054;font-size:12px;font-weight:700;margin-bottom:6px}
+    .field small{display:block;color:var(--muted);font-size:11px;margin-top:5px}
+    input,select{height:39px;width:100%;border:1px solid #d0d5dd;border-radius:8px;background:#fff;color:#101828;padding:0 11px;outline:none}
+    input:focus,select:focus{border-color:#84adff;box-shadow:0 0 0 3px #eff4ff}
+    input[readonly],select:disabled{background:#f9fafb;color:#475467}
+    .source-choice{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+    .choice{position:relative;border:1px solid var(--line);border-radius:10px;padding:14px 14px 14px 42px;background:#fff;cursor:pointer}
+    .choice.active{border-color:#84adff;background:#f5f8ff;box-shadow:0 0 0 1px #84adff}
+    .choice input{position:absolute;left:13px;top:16px;width:17px;height:17px}
+    .choice strong{display:block;font-size:13px}
+    .choice small{display:block;color:var(--muted);margin-top:2px}
+    .notice{border:1px solid #b2ddff;background:var(--blue-soft);border-radius:10px;padding:12px 14px;color:#175cd3;margin-top:16px}
+    .notice.warning{border-color:#fedf89;background:var(--warning-bg);color:var(--warning)}
+    .notice.success{border-color:#abefc6;background:var(--success-bg);color:var(--success)}
+    .notice strong{display:block;margin-bottom:2px}
+    .notice[hidden]{display:none}
+    .period-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:18px}
+    .period-summary div{background:#f9fafb;padding:12px}
+    .period-summary span{display:block;color:var(--muted);font-size:11px}
+    .period-summary strong{display:block;margin-top:2px;font-size:13px}
+    .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0 12px}
+    .toolbar h3{margin:0;font-size:16px}
+    .toolbar p{margin:3px 0 0;color:var(--muted);font-size:12px}
+    .toolbar-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .output-card{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:12px;box-shadow:var(--shadow);overflow:hidden}
+    .output-head{padding:13px 16px;background:#fcfcfd;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .output-title{display:flex;align-items:center;gap:10px}
+    .metric-icon{width:33px;height:33px;border-radius:9px;background:#eff4ff;color:#3538cd;display:grid;place-items:center;font-weight:900}
+    .metric-icon.fractile{background:var(--purple-bg);color:var(--purple)}
+    .output-title strong{display:block}
+    .output-title small{color:var(--muted)}
+    .output-body{padding:16px}
+    .metric-help{margin-top:12px;padding:10px 12px;border-radius:8px;background:#f9fafb;color:#475467;font-size:12px}
+    .metric-help.fractile{background:var(--purple-bg);color:#53389e}
+    .fractile-field[hidden]{display:none}
+    .results{overflow:auto;border:1px solid var(--line);border-radius:10px}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th{background:#f9fafb;color:#475467;text-align:left;font-weight:700;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+    td{padding:11px 12px;border-bottom:1px solid #f2f4f7;white-space:nowrap}
+    tr:last-child td{border-bottom:0}
+    .value{font-weight:800;font-size:13px}
+    .status{display:inline-flex;padding:3px 7px;border-radius:999px;background:var(--success-bg);color:var(--success);font-weight:800}
+    .empty{padding:30px;text-align:center;color:var(--muted)}
+    .checkline{display:flex;align-items:center;gap:8px;margin-top:12px;color:#475467}
+    .checkline input{width:16px;height:16px}
+    .footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
+    @media(max-width:1050px){
+      .layout{grid-template-columns:1fr}
+      .sidebar{display:none}
+      .grid.three,.grid.four{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .period-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media(max-width:680px){
+      .content{padding:18px}
+      .page-head{display:block}
+      .actions{margin-top:14px}
+      .grid.two,.grid.three,.grid.four,.source-choice{grid-template-columns:1fr}
+      .toolbar{display:block}
+      .toolbar-actions{margin-top:10px}
+      .top-actions span{display:none}
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">BT</div>
+      <div>
+        <h1>BlueTrust Monitoring</h1>
+        <p>Acoustic processing prototype</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span>Prototype fonctionnel à partager avec l’équipe de développement</span>
+      <button class="button small" id="resetDemo">Réinitialiser</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="side-title">Configuration</div>
+      <button class="step active" data-panel="source"><span class="step-number">1</span><span>Source de données</span></button>
+      <button class="step" data-panel="outputs"><span class="step-number">2</span><span>Indicateurs acoustiques</span></button>
+      <button class="step" data-panel="execution"><span class="step-number">3</span><span>Exécution</span></button>
+      <button class="step" data-panel="preview"><span class="step-number">4</span><span>Aperçu des résultats</span></button>
+      <div class="dev-note">
+        <strong>Principe retenu</strong><br>
+        En production, les données viennent de la base BTM. Le CSV reste disponible uniquement pour simuler le comportement dans cette démo.
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h2>LAeq et indices fractiles <span class="badge new">NOUVEAU</span></h2>
+          <p>Un même traitement génère des LAeq, L10, L50, L90 ou un fractile personnalisé.</p>
+        </div>
+        <div class="actions">
+          <label class="page-language">
+            <span>Langue</span>
+            <select class="language-select" id="languageSelect" aria-label="Langue">
+              <option value="fr">🇫🇷 Français</option>
+              <option value="en-GB">🇬🇧 English (UK)</option>
+            </select>
+          </label>
+          <button class="button">Annuler</button>
+          <button class="button primary" id="saveButton">Enregistrer le processing</button>
+        </div>
+      </div>
+
+      <section class="panel active" id="source">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Source acoustique <span class="badge new">MODIFIÉ</span></h3>
+              <p>La variable BTM est la source normale du traitement. Le fichier local sert uniquement à la démonstration.</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="source-choice">
+              <label class="choice active" id="dbChoice">
+                <input type="radio" name="sourceType" value="database" checked>
+                <strong>Variable enregistrée dans BTM</strong>
+                <small>Mode utilisé en production</small>
+              </label>
+              <label class="choice" id="csvChoice">
+                <input type="radio" name="sourceType" value="csv">
+                <strong>Fichier CSV</strong>
+                <small>Démonstration uniquement</small>
+              </label>
+            </div>
+
+            <div id="databaseSource">
+              <div class="grid three">
+                <label class="field">
+                  <span>Projet</span>
+                  <select><option>33730_Via Augusta 421</option></select>
+                </label>
+                <label class="field">
+                  <span>Capteur</span>
+                  <select><option>Sonomètre 5184</option><option>Sonomètre 5185</option></select>
+                </label>
+                <label class="field">
+                  <span>Variable source</span>
+                  <select id="sourceResolution">
+                    <option value="1">LAeq,1s — dB(A)</option>
+                    <option value="60">LAeq,1min — dB(A)</option>
+                  </select>
+                  <small>Les deux résolutions peuvent être utilisées.</small>
+                </label>
+              </div>
+            </div>
+
+            <div id="csvSource" hidden>
+              <label class="field">
+                <span>Fichier de démonstration</span>
+                <input type="file" accept=".csv,.txt">
+                <small>Format attendu : timestamp + LAeq court. Aucun fichier n’est envoyé vers BTM.</small>
+              </label>
+            </div>
+
+            <div class="period-summary">
+              <div><span>Variable sélectionnée</span><strong id="selectedSource">LAeq,1s</strong></div>
+              <div><span>Intervalle d’acquisition</span><strong id="selectedInterval">1 seconde</strong></div>
+              <div><span>Pondération</span><strong>A — dB(A)</strong></div>
+              <div><span>Disponibilité</span><strong>Enregistrée en continu</strong></div>
+            </div>
+
+            <div class="notice success" id="sourceQuality">
+              <strong>Source recommandée pour les fractiles</strong>
+              Avec une valeur par seconde, une période de 15 minutes contient environ 900 niveaux acoustiques.
+            </div>
+            <div class="notice warning" id="resolutionWarning" hidden>
+              <strong>Résolution temporelle limitée</strong>
+              Le calcul reste possible avec LAeq,1min, mais une période de 15 minutes ne contient que 15 valeurs. Les variations sonores inférieures à une minute ne seront pas représentées.
+            </div>
+          </div>
+        </article>
+        <div class="footer-actions"><button class="button primary next" data-next="outputs">Continuer</button></div>
+      </section>
+
+      <section class="panel" id="outputs">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Période commune de calcul</h3>
+              <p>Ces paramètres sont repris automatiquement lors de l’ajout des indices courants.</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="grid four">
+              <label class="field">
+                <span>Mode</span>
+                <select id="commonMode"><option value="fixed">Blocs fixes</option><option value="rolling">Glissant</option><option value="calendar">Période calendrier</option></select>
+              </label>
+              <label class="field">
+                <span>Durée</span>
+                <input id="commonDuration" type="number" min="1" value="15">
+              </label>
+              <label class="field">
+                <span>Unité</span>
+                <select id="commonUnit"><option value="min">minutes</option><option value="h">heures</option></select>
+              </label>
+              <label class="field">
+                <span>Couverture minimale</span>
+                <select><option>80 %</option><option>90 %</option><option>100 %</option></select>
+              </label>
+            </div>
+          </div>
+        </article>
+
+        <div class="toolbar">
+          <div>
+            <h3>Variables générées <span class="badge new">MODIFIÉ</span></h3>
+            <p>Chaque sortie choisit maintenant son type de calcul.</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="button soft" id="addCommon">+ Ajouter L10, L50 et L90</button>
+            <button class="button" id="addOutput">+ Ajouter une sortie</button>
+          </div>
+        </div>
+
+        <div id="outputList"></div>
+
+        <div class="notice">
+          <strong>Règle de calcul</strong>
+          Le LAeq utilise une moyenne énergétique. Les indices fractiles utilisent le percentile des niveaux acoustiques de la période, sans moyenne énergétique.
+        </div>
+        <div class="footer-actions">
+          <button class="button next" data-next="source">Retour</button>
+          <button class="button primary next" data-next="execution">Continuer</button>
+        </div>
+      </section>
+
+      <section class="panel" id="execution">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Exécution du processing</h3>
+              <p>La logique existante de fenêtres complètes, couverture et rattrapage est conservée.</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="grid three">
+              <label class="field">
+                <span>Déclenchement</span>
+                <select><option>Automatique — fréquence recommandée</option><option>Fréquence personnalisée</option></select>
+              </label>
+              <label class="field">
+                <span>Fréquence estimée</span>
+                <input value="Toutes les 15 minutes" readonly>
+              </label>
+              <label class="field">
+                <span>Fuseau horaire</span>
+                <select><option>Europe/Paris</option><option>Europe/London</option><option>Europe/Madrid</option></select>
+              </label>
+            </div>
+            <label class="checkline"><input type="checkbox" checked> Calculer automatiquement les périodes manquantes lors du prochain passage</label>
+            <div class="notice success">
+              <strong>Une seule lecture de la base</strong>
+              La Lambda récupère les données de la période une fois, puis calcule toutes les sorties actives : LAeq, L10, L50 et L90.
+            </div>
+          </div>
+        </article>
+        <div class="footer-actions">
+          <button class="button next" data-next="outputs">Retour</button>
+          <button class="button primary next" data-next="preview">Voir l’aperçu</button>
+        </div>
+      </section>
+
+      <section class="panel" id="preview">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Aperçu des résultats <span class="badge new">MODIFIÉ</span></h3>
+              <p>La table identifie maintenant l’indicateur et la résolution de la source utilisée.</p>
+            </div>
+            <button class="button primary" id="simulateButton">Simuler le calcul</button>
+          </div>
+          <div class="card-body">
+            <div class="results">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Variable</th>
+                    <th>Indicateur</th>
+                    <th>Période</th>
+                    <th>Valeur</th>
+                    <th>Source</th>
+                    <th>Échantillons</th>
+                    <th>Couverture</th>
+                    <th>Statut</th>
+                  </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+              </table>
+            </div>
+            <div class="notice" id="resultExplanation">
+              <strong>Traçabilité</strong>
+              Chaque résultat doit conserver la variable source, sa résolution, le nombre de valeurs utilisées, la couverture et la version de l’algorithme.
+            </div>
+          </div>
+        </article>
+        <div class="footer-actions">
+          <button class="button next" data-next="execution">Retour</button>
+          <button class="button primary" id="finalSave">Enregistrer le processing</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="outputTemplate">
+    <article class="output-card">
+      <div class="output-head">
+        <div class="output-title">
+          <div class="metric-icon">EQ</div>
+          <div><strong class="card-name">Nouvelle sortie</strong><small class="card-summary">LAeq · 15 minutes</small></div>
+        </div>
+        <button class="button danger small remove-output">Supprimer</button>
+      </div>
+      <div class="output-body">
+        <div class="grid four">
+          <label class="field">
+            <span>Variable générée</span>
+            <input class="variable-name" value="Noise_LAeq_15min">
+          </label>
+          <label class="field">
+            <span>Indicateur <span class="badge new">NOUVEAU</span></span>
+            <select class="metric-type">
+              <option value="laeq">LAeq — moyenne énergétique</option>
+              <option value="fractile">Indice fractile</option>
+            </select>
+          </label>
+          <label class="field fractile-field" hidden>
+            <span>Indice de dépassement <span class="badge new">NOUVEAU</span></span>
+            <select class="fractile-value">
+              <option value="10">L10 — événements bruyants</option>
+              <option value="50">L50 — niveau médian</option>
+              <option value="90">L90 — bruit de fond</option>
+              <option value="95">L95 — bruit de fond stable</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Période</span>
+            <input class="period-display" value="15 minutes" readonly>
+          </label>
+        </div>
+        <div class="metric-help">Le niveau équivalent est obtenu par moyenne énergétique des niveaux de la période.</div>
+      </div>
+    </article>
+  </template>
+
+  <script>
+    let currentLanguage="fr";
+    const englishUK={
+      "BTM — LAeq et indices fractiles":"BTM — LAeq and statistical noise indices",
+      "Prototype fonctionnel à partager avec l’équipe de développement":"Functional prototype to share with the development team",
+      "Réinitialiser":"Reset",
+      "Langue":"Language",
+      "Configuration":"Configuration",
+      "Source de données":"Data source",
+      "Indicateurs acoustiques":"Acoustic indicators",
+      "Exécution":"Execution",
+      "Aperçu des résultats":"Results preview",
+      "Principe retenu":"Selected approach",
+      "En production, les données viennent de la base BTM. Le CSV reste disponible uniquement pour simuler le comportement dans cette démo.":"In production, data are read from the BTM database. CSV remains available only to simulate the workflow in this demo.",
+      "LAeq et indices fractiles":"LAeq and statistical noise indices",
+      "NOUVEAU":"NEW",
+      "MODIFIÉ":"CHANGED",
+      "Un même traitement génère des LAeq, L10, L50, L90 ou un fractile personnalisé.":"One processing configuration generates LAeq, L10, L50, L90 or a custom statistical noise index.",
+      "Annuler":"Cancel",
+      "Enregistrer le processing":"Save processing",
+      "Source acoustique":"Acoustic source",
+      "La variable BTM est la source normale du traitement. Le fichier local sert uniquement à la démonstration.":"The BTM variable is the normal processing source. The local file is used for demonstration only.",
+      "Variable enregistrée dans BTM":"Variable stored in BTM",
+      "Mode utilisé en production":"Production mode",
+      "Fichier CSV":"CSV file",
+      "Démonstration uniquement":"Demo only",
+      "Projet":"Project",
+      "Capteur":"Sensor",
+      "Sonomètre 5184":"Sound level meter 5184",
+      "Sonomètre 5185":"Sound level meter 5185",
+      "Variable source":"Source variable",
+      "Les deux résolutions peuvent être utilisées.":"Both resolutions can be used.",
+      "Fichier de démonstration":"Demonstration file",
+      "Format attendu : timestamp + LAeq court. Aucun fichier n’est envoyé vers BTM.":"Expected format: timestamp + short LAeq. No file is sent to BTM.",
+      "Variable sélectionnée":"Selected variable",
+      "Intervalle d’acquisition":"Acquisition interval",
+      "1 seconde":"1 second",
+      "1 minute":"1 minute",
+      "Pondération":"Weighting",
+      "Disponibilité":"Availability",
+      "Enregistrée en continu":"Continuously recorded",
+      "Source recommandée pour les fractiles":"Recommended source for statistical noise indices",
+      "Avec une valeur par seconde, une période de 15 minutes contient environ 900 niveaux acoustiques.":"With one value per second, a 15-minute period contains approximately 900 acoustic levels.",
+      "Résolution temporelle limitée":"Limited time resolution",
+      "Le calcul reste possible avec LAeq,1min, mais une période de 15 minutes ne contient que 15 valeurs. Les variations sonores inférieures à une minute ne seront pas représentées.":"Calculation remains possible with LAeq,1min, but a 15-minute period contains only 15 values. Sound variations shorter than one minute will not be represented.",
+      "Continuer":"Continue",
+      "Période commune de calcul":"Common calculation period",
+      "Ces paramètres sont repris automatiquement lors de l’ajout des indices courants.":"These settings are reused automatically when common indices are added.",
+      "Mode":"Mode",
+      "Blocs fixes":"Fixed blocks",
+      "Glissant":"Rolling",
+      "Période calendrier":"Calendar period",
+      "Durée":"Duration",
+      "Unité":"Unit",
+      "minute":"minute",
+      "minutes":"minutes",
+      "heure":"hour",
+      "heures":"hours",
+      "Couverture minimale":"Minimum coverage",
+      "Variables générées":"Generated variables",
+      "Chaque sortie choisit maintenant son type de calcul.":"Each output now selects its calculation type.",
+      "+ Ajouter L10, L50 et L90":"+ Add L10, L50 and L90",
+      "+ Ajouter une sortie":"+ Add output",
+      "Règle de calcul":"Calculation rule",
+      "Le LAeq utilise une moyenne énergétique. Les indices fractiles utilisent le percentile des niveaux acoustiques de la période, sans moyenne énergétique.":"LAeq uses an energy average. Statistical noise indices use the percentile of the acoustic levels in the period, without energy averaging.",
+      "Retour":"Back",
+      "Exécution du processing":"Processing execution",
+      "La logique existante de fenêtres complètes, couverture et rattrapage est conservée.":"The existing complete-window, coverage and catch-up logic is retained.",
+      "Déclenchement":"Trigger",
+      "Automatique — fréquence recommandée":"Automatic — recommended frequency",
+      "Fréquence personnalisée":"Custom frequency",
+      "Fréquence estimée":"Estimated frequency",
+      "Toutes les 15 minutes":"Every 15 minutes",
+      "Fuseau horaire":"Time zone",
+      "Calculer automatiquement les périodes manquantes lors du prochain passage":"Automatically calculate missing periods during the next run",
+      "Une seule lecture de la base":"One database read",
+      "La Lambda récupère les données de la période une fois, puis calcule toutes les sorties actives : LAeq, L10, L50 et L90.":"The Lambda retrieves the period data once, then calculates all active outputs: LAeq, L10, L50 and L90.",
+      "Voir l’aperçu":"View preview",
+      "La table identifie maintenant l’indicateur et la résolution de la source utilisée.":"The table now identifies the indicator and the resolution of the source used.",
+      "Simuler le calcul":"Simulate calculation",
+      "Variable":"Variable",
+      "Indicateur":"Indicator",
+      "Période":"Period",
+      "Valeur":"Value",
+      "Source":"Source",
+      "Échantillons":"Samples",
+      "Couverture":"Coverage",
+      "Statut":"Status",
+      "Traçabilité":"Traceability",
+      "Chaque résultat doit conserver la variable source, sa résolution, le nombre de valeurs utilisées, la couverture et la version de l’algorithme.":"Each result must retain the source variable, its resolution, the number of values used, the coverage and the algorithm version.",
+      "Nouvelle sortie":"New output",
+      "Supprimer":"Remove",
+      "Variable générée":"Generated variable",
+      "LAeq — moyenne énergétique":"LAeq — energy average",
+      "Indice fractile":"Statistical noise index",
+      "Indice de dépassement":"Exceedance index",
+      "L10 — événements bruyants":"L10 — louder events",
+      "L50 — niveau médian":"L50 — median level",
+      "L90 — bruit de fond":"L90 — background noise",
+      "L95 — bruit de fond stable":"L95 — stable background noise",
+      "Le niveau équivalent est obtenu par moyenne énergétique des niveaux de la période.":"The equivalent sound level is calculated using an energy average of the levels in the period.",
+      "L10 représente les événements les plus bruyants de la période.":"L10 represents the louder events in the period.",
+      "L50 représente le niveau médian de la période.":"L50 represents the median level in the period.",
+      "L90 représente généralement le bruit de fond.":"L90 generally represents background noise.",
+      "L95 représente un bruit de fond plus stable.":"L95 represents a more stable background noise level.",
+      "Indice statistique de dépassement.":"Statistical exceedance index.",
+      "Le calcul utilise un percentile, sans moyenne énergétique.":"The calculation uses a percentile, without energy averaging.",
+      "Calculé":"Calculated",
+      "Aucune sortie configurée.":"No output configured.",
+      "Prototype : la configuration LAeq + fractiles est prête à être enregistrée.":"Prototype: the LAeq and statistical noise index configuration is ready to be saved.",
+      "Prototype : processing enregistré avec ses variables LAeq et fractiles.":"Prototype: processing saved with its LAeq and statistical noise index variables."
+    };
+
+    function translated(text){
+      return currentLanguage==="en-GB"?(englishUK[text]||text):text;
+    }
+
+    function translateTree(root=document.body){
+      const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+      let node;
+      while((node=walker.nextNode())){
+        if(["SCRIPT","STYLE"].includes(node.parentElement?.tagName))continue;
+        const trimmed=node.nodeValue.trim();
+        if(!trimmed)continue;
+        if(node._frenchText===undefined)node._frenchText=trimmed;
+        const replacement=translated(node._frenchText);
+        node.nodeValue=node.nodeValue.replace(trimmed,replacement);
+      }
+      document.documentElement.lang=currentLanguage==="en-GB"?"en-GB":"fr";
+      document.title=translated("BTM — LAeq et indices fractiles");
+    }
+
+    function setLocalisedText(element,frenchText){
+      element.textContent=translated(frenchText);
+      if(element.firstChild)element.firstChild._frenchText=frenchText;
+    }
+
+    const state={
+      outputs:[
+        {metric:"laeq",fractile:null,name:"Noise_LAeq_15min"},
+        {metric:"fractile",fractile:10,name:"Noise_LA10_15min"},
+        {metric:"fractile",fractile:50,name:"Noise_LA50_15min"},
+        {metric:"fractile",fractile:90,name:"Noise_LA90_15min"}
+      ]
+    };
+
+    const $=selector=>document.querySelector(selector);
+    const $$=selector=>[...document.querySelectorAll(selector)];
+
+    function periodLabel(){
+      const duration=Math.max(1,Number($("#commonDuration").value)||15);
+      const unit=$("#commonUnit").value==="h"?(duration>1?"heures":"heure"):(duration>1?"minutes":"minute");
+      return `${duration} ${translated(unit)}`;
+    }
+
+    function activatePanel(id){
+      $$(".panel").forEach(panel=>panel.classList.toggle("active",panel.id===id));
+      $$(".step").forEach(step=>step.classList.toggle("active",step.dataset.panel===id));
+      window.scrollTo({top:0,behavior:"smooth"});
+    }
+
+    function metricLabel(output){
+      return output.metric==="laeq"?"LAeq":`L${output.fractile}`;
+    }
+
+    function metricDescription(output){
+      if(output.metric==="laeq")return translated("Le niveau équivalent est obtenu par moyenne énergétique des niveaux de la période.");
+      const descriptions={
+        10:"L10 représente les événements les plus bruyants de la période.",
+        50:"L50 représente le niveau médian de la période.",
+        90:"L90 représente généralement le bruit de fond.",
+        95:"L95 représente un bruit de fond plus stable."
+      };
+      return `${translated(descriptions[output.fractile]||"Indice statistique de dépassement.")} ${translated("Le calcul utilise un percentile, sans moyenne énergétique.")}`;
+    }
+
+    function updateOutputFromCard(card,index){
+      const output=state.outputs[index];
+      output.metric=card.querySelector(".metric-type").value;
+      output.fractile=output.metric==="fractile"?Number(card.querySelector(".fractile-value").value):null;
+      output.name=card.querySelector(".variable-name").value.trim()||`Noise_${metricLabel(output)}_15min`;
+      const label=metricLabel(output);
+      card.querySelector(".fractile-field").hidden=output.metric!=="fractile";
+      card.querySelector(".metric-icon").textContent=output.metric==="laeq"?"EQ":label;
+      card.querySelector(".metric-icon").classList.toggle("fractile",output.metric==="fractile");
+      card.querySelector(".card-name").textContent=output.name;
+      card.querySelector(".card-summary").textContent=`${label} · ${periodLabel()}`;
+      card.querySelector(".period-display").value=periodLabel();
+      card.querySelector(".metric-help").textContent=metricDescription(output);
+      card.querySelector(".metric-help").classList.toggle("fractile",output.metric==="fractile");
+    }
+
+    function renderOutputs(){
+      const list=$("#outputList");
+      list.innerHTML="";
+      state.outputs.forEach((output,index)=>{
+        const card=$("#outputTemplate").content.firstElementChild.cloneNode(true);
+        card.querySelector(".variable-name").value=output.name;
+        card.querySelector(".metric-type").value=output.metric;
+        card.querySelector(".fractile-value").value=String(output.fractile||10);
+        card.querySelectorAll("input,select").forEach(control=>control.addEventListener("input",()=>updateOutputFromCard(card,index)));
+        card.querySelector(".remove-output").addEventListener("click",()=>{
+          state.outputs.splice(index,1);
+          renderOutputs();
+        });
+        list.append(card);
+        updateOutputFromCard(card,index);
+      });
+      translateTree(list);
+    }
+
+    function addFractile(fractile){
+      if(state.outputs.some(output=>output.metric==="fractile"&&output.fractile===fractile))return;
+      state.outputs.push({metric:"fractile",fractile,name:`Noise_LA${fractile}_15min`});
+    }
+
+    function renderResults(){
+      const interval=Number($("#sourceResolution").value);
+      const duration=Number($("#commonDuration").value)||15;
+      const seconds=$("#commonUnit").value==="h"?duration*3600:duration*60;
+      const expected=Math.max(1,Math.round(seconds/interval));
+      const sampleText=expected.toLocaleString("fr-FR");
+      const source=interval===1?"LAeq,1s":"LAeq,1min";
+      const values={LAeq:58.4,L10:64.8,L50:56.9,L90:43.2,L95:41.7};
+      $("#resultBody").innerHTML=state.outputs.map(output=>{
+        const metric=metricLabel(output);
+        const value=values[metric]??52.6;
+        return `<tr>
+          <td><strong>${escapeHtml(output.name)}</strong></td>
+          <td><span class="badge">${metric}</span></td>
+          <td>${periodLabel()}</td>
+          <td class="value">${value.toFixed(1)} dB(A)</td>
+          <td>${source}</td>
+          <td>${sampleText} / ${sampleText}</td>
+          <td>100 %</td>
+          <td><span class="status">${translated("Calculé")}</span></td>
+        </tr>`;
+      }).join("")||`<tr><td colspan="8" class="empty">${translated("Aucune sortie configurée.")}</td></tr>`;
+    }
+
+    function escapeHtml(value){
+      return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[char]));
+    }
+
+    $$("[data-panel]").forEach(button=>button.addEventListener("click",()=>activatePanel(button.dataset.panel)));
+    $$(".next").forEach(button=>button.addEventListener("click",()=>activatePanel(button.dataset.next)));
+
+    $$('input[name="sourceType"]').forEach(radio=>radio.addEventListener("change",()=>{
+      const database=radio.value==="database"&&radio.checked;
+      $("#databaseSource").hidden=!database;
+      $("#csvSource").hidden=database;
+      $("#dbChoice").classList.toggle("active",database);
+      $("#csvChoice").classList.toggle("active",!database);
+    }));
+
+    $("#sourceResolution").addEventListener("change",event=>{
+      const oneSecond=event.target.value==="1";
+      setLocalisedText($("#selectedSource"),oneSecond?"LAeq,1s":"LAeq,1min");
+      setLocalisedText($("#selectedInterval"),oneSecond?"1 seconde":"1 minute");
+      $("#sourceQuality").hidden=!oneSecond;
+      $("#resolutionWarning").hidden=oneSecond;
+      renderResults();
+    });
+
+    $("#addCommon").addEventListener("click",()=>{
+      [10,50,90].forEach(addFractile);
+      renderOutputs();
+    });
+
+    $("#addOutput").addEventListener("click",()=>{
+      state.outputs.push({metric:"laeq",fractile:null,name:`Noise_LAeq_custom_${state.outputs.length+1}`});
+      renderOutputs();
+    });
+
+    ["commonDuration","commonUnit","commonMode"].forEach(id=>$("#"+id).addEventListener("input",()=>{
+      renderOutputs();
+      renderResults();
+    }));
+
+    $("#simulateButton").addEventListener("click",renderResults);
+    $("#saveButton").addEventListener("click",()=>alert(translated("Prototype : la configuration LAeq + fractiles est prête à être enregistrée.")));
+    $("#finalSave").addEventListener("click",()=>alert(translated("Prototype : processing enregistré avec ses variables LAeq et fractiles.")));
+    $("#resetDemo").addEventListener("click",()=>location.reload());
+    $("#languageSelect").addEventListener("change",event=>{
+      currentLanguage=event.target.value;
+      translateTree();
+      renderOutputs();
+      renderResults();
+    });
+
+    renderOutputs();
+    renderResults();
+    translateTree();
+  </script>
+</body>
+</html>
